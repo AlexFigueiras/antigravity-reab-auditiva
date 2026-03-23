@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10.2)
+cmake_minimum_required(VERSION 3.22.1)
 project(dsp_audio_engine)
 
 # Injeta a biblioteca do Google Oboe via FetchContent
@@ -29,5 +29,5 @@ target_link_libraries(dsp_audio_engine
     PRIVATE
     ${log-lib}
     android
-    oboe::oboe
+    oboe
 )

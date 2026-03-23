@@ -1,6 +1,10 @@
 #pragma once
 #include <cmath>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 // Implementação Direct Form II Transposed (Mitiga erros de quantização de ponto flutuante em IIR)
 class BiquadFilter {
 private:

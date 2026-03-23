@@ -9,8 +9,8 @@ OboeEngine::~OboeEngine() {
 }
 
 bool OboeEngine::start() {
-    // Para simplificar a Integração, estamos configurando a perna de Output (Speaker/Headphone)
-    // Para um pass-through real de microfone, instanciaríamos o InputStream sincronizado aqui.
+    if (outputStream) return true; // Já está rodando [IDEMPOTENTE]
+
     oboe::AudioStreamBuilder builder;
     
     // 1. OBRIGAÇÃO DA ENGENHARIA: 48kHz (Acesso Direto ao Mixer nativo do Android OS)
@@ -22,7 +22,7 @@ bool OboeEngine::start() {
     
     // Configurações Físicas
     builder.setFormat(oboe::AudioFormat::Float);
-    builder.setChannelCount(oboe::ChannelCount::Mono);
+    builder.setChannelCount(oboe::ChannelCount::Stereo);
     builder.setDirection(oboe::Direction::Output);
     
     // 3. Thread Nativa para impedir bloqueio à UI
@@ -59,13 +59,29 @@ oboe::DataCallbackResult OboeEngine::onAudioReady(
     
     float *floatData = static_cast<float *>(audioData);
     
-    // [PREPARAÇÃO: Pass-Through do Microfone virá para preencher floatData aqui]
-    // Por enquanto, preenchemos com silêncio para não dar lixo de memória na placa de som
-    for(int i = 0; i < numFrames * oboeStream->getChannelCount(); i++) {
-        floatData[i] = 0.0f; // Silence / Mic Placeholder
+    // MIXER NATIVO (Zero Latency Synthesis)
+    for(int i = 0; i < numFrames; i++) {
+        float monoTarget = targetPlayer.getNextSample();
+        float monoNoise = noisePlayer.getNextSample();
+        float monoWhite = whiteNoiseGenerator.getNextSample();
+
+        for(int ch = 0; ch < 2; ch++) {
+            float mixedSample = 0.0f;
+            
+            // 1. Testa tom puro (Lateralizado)
+            mixedSample += testOscillator.getNextSample(ch);
+            
+            // 2. Treino de Efeito Coquetel (Centrado)
+            mixedSample += monoTarget;
+            mixedSample += monoNoise;
+            mixedSample += monoWhite;
+
+            floatData[i * 2 + ch] = mixedSample;
+        }
+        testOscillator.updatePhase();
     }
 
-    // Processamento do Pipeline DSP
+    // Processamento do Pipeline DSP (IIR/FIR Híbrido)
     // Roteamento para a matemática Híbrida do Crossover e EQ paramétrico
     dspEngine.processAudioBlock(floatData, numFrames, oboeStream->getChannelCount());
     

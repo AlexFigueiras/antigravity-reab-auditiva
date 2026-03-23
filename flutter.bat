@@ -1,2 +1,2 @@
 @echo off
-call "C:\Users\Pc direito\AppData\Roaming\FlutterFlow\flutterflow\flutter\bin\flutter.bat" %*
+call "C:\Users\pcDev\dev\flutter\bin\flutter.bat" %*

@@ -65,5 +65,35 @@ void destroy_engine(EngineContext* ctx) {
     }
 }
 
+// --- NOVOS MÉTODOS CLÍNICOS ---
+
+NATIVE_EXPORT
+void set_test_tone(EngineContext* ctx, float freq, float amp, int32_t left, int32_t right) {
+#ifdef __ANDROID__
+    if (ctx && ctx->engine) ctx->engine->setTestTone(freq, amp, left != 0, right != 0);
+#endif
+}
+
+NATIVE_EXPORT
+void set_target_sample(EngineContext* ctx, float* data, int32_t len, float vol, int32_t loop) {
+#ifdef __ANDROID__
+    if (ctx && ctx->engine) ctx->engine->setTargetSample(data, len, vol, loop != 0);
+#endif
+}
+
+NATIVE_EXPORT
+void set_noise_sample(EngineContext* ctx, float* data, int32_t len, float vol, int32_t loop) {
+#ifdef __ANDROID__
+    if (ctx && ctx->engine) ctx->engine->setNoiseSample(data, len, vol, loop != 0);
+#endif
+}
+
+NATIVE_EXPORT
+void set_noise_intensity(EngineContext* ctx, float intensity) {
+#ifdef __ANDROID__
+    if (ctx && ctx->engine) ctx->engine->setNoiseIntensity(intensity);
+#endif
+}
+
 
 } // extern "C"

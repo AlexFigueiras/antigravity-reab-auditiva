@@ -9,16 +9,21 @@ class DspEngine {
 private:
     float sampleRate;
 
-    // Componentes Acústicos
-    BiquadFilter lowPass1000Hz;  // Crossover para graves
-    BiquadFilter peakingEQ;      // Reforço paramétrico para fonemas /s/
+    // Componentes Acústicos (Stereo ready - Dual path)
+    BiquadFilter lowPass1000Hz[2];  // Crossover para graves (L/R)
+    BiquadFilter peakingEQ[2];      // Reforço paramétrico para fonemas /s/ (L/R)
     
     // Novo Pipeline Clínico de Compressão e Transientes (> 1.000 Hz)
-    PartitionedFIR highPassFir;
-    TemporalEnvelopeExpander teeProcessor;
+    PartitionedFIR highPassFir[2];
+    TemporalEnvelopeExpander teeProcessor[2];
+
+    // Novo: Delay de compensação para alinhar IIR (Grave) com o FIR (Agudo)
+    // FIR de 512 taps = Atraso de 256 amostras.
+    float lowFreqDelayBuffer[2][512]; 
+    int delayWritePtr[2];
 
     // Buffer da rota de Convolução
-    std::vector<float> highFreqBuffer;
+    std::vector<float> highFreqBuffer[2];
 
 
 public:

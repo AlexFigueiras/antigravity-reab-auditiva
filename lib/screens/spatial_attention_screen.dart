@@ -37,6 +37,7 @@ class _SpatialAttentionScreenState extends State<SpatialAttentionScreen> {
   @override
   void initState() {
     super.initState();
+    _engine.initializeEngine(widget.audiogram);
     _startTrial();
   }
 

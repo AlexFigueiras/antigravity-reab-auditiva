@@ -1,7 +1,7 @@
 import 'dart:math';
 
 /// Representação das Orelhas
-enum EarSide { left, right }
+enum EarSide { left, right, both }
 
 /// Representação da Via de Condução (Aérea ou Óssea)
 enum ConductionType { air, bone }

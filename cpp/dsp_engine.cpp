@@ -1,63 +1,82 @@
 #include "dsp_engine.h"
 
-DspEngine::DspEngine(float sr) : sampleRate(sr), highPassFir(512, 128) {
+DspEngine::DspEngine(float sr) : sampleRate(sr) {
+    for (int i = 0; i < 2; i++) {
+        highFreqBuffer[i].resize(2048, 0.0f);
+        delayWritePtr[i] = 0;
+        for(int j=0; j<512; j++) lowFreqDelayBuffer[i][j] = 0.0f;
+    }
     initializeParameters();
-    highFreqBuffer.resize(2048, 0.0f); // Prevenção de Segurança de Memória
 }
 
 DspEngine::~DspEngine() {}
 
 // Configura matematicamente o Motor de Acordo com as Regras Clínicas
 void DspEngine::initializeParameters() {
-    // 1. Crossover de 1000 Hz: Filtro Passa-Baixa (IIR) para os graves (Q = 0.707 - Butterworth)
-    lowPass1000Hz.configureLowPass(sampleRate, 1000.0f, 0.707f);
+    for (int i = 0; i < 2; i++) {
+        // 1. Crossover de 1000 Hz: Filtro Passa-Baixa (IIR) para os graves (Q = 0.707 - Butterworth)
+        lowPass1000Hz[i].configureLowPass(sampleRate, 1000.0f, 0.707f);
 
-    // 2. Filtro FIR Janelado (Fase Estritamente Linear) - 512 taps, Beta 5.0 (Kaiser Janela Ouro)
-    highPassFir.designHighPassKaiser(sampleRate, 1000.0f, 5.0f);
+        // 2. Filtro FIR Janelado (Fase Estritamente Linear) - 512 taps, Beta 5.0 (Kaiser)
+        highPassFir[i].designHighPassKaiser(sampleRate, 1000.0f, 5.0f);
 
-    // 3. TEE: Temporal Envelope Expansion
-    // Attack=2.0ms, Release=30.0ms, Gamma=0.7 (Punch Clássico de Sibilante)
-    teeProcessor.initialize(sampleRate, 2.0f, 30.0f, 0.7f);
+        // 3. TEE: Temporal Envelope Expansion
+        teeProcessor[i].initialize(sampleRate, 2.0f, 30.0f, 0.7f);
 
-    // 4. Equalizador de Pico (Peaking EQ): Realça Transientes
-    // Frequência Central: 5500 Hz (fator Q: 4.32 = 1/3 de Oitava), Ganho: +4.0 dB
-    peakingEQ.configurePeakingEQ(sampleRate, 5500.0f, 4.32f, 4.0f);
+        // 4. Equalizador de Pico (Peaking EQ): Realça Transientes
+        peakingEQ[i].configurePeakingEQ(sampleRate, 5500.0f, 4.32f, 4.0f);
+    }
 }
 
 // Núcleo de Latência Ultrabaixa (Obrigação: Executar em < 20ms de latência overall)
 void DspEngine::processAudioBlock(float* audioData, int numFrames, int numChannels) {
-    // Garantia matemática de bloco contíguo Mono Seguro (Evita re-scaling do loop em Estéreo avançado)
-    if (highFreqBuffer.size() < numFrames) highFreqBuffer.resize(numFrames);
+    if (numChannels > 2) numChannels = 2; // Suporta apenas mono/stereo
 
-    // Pré-Processamento por Blocos: Overlap-Save FIR Convolução Simulativa
-    highPassFir.processBlockOverlapSave(audioData, highFreqBuffer.data(), numFrames);
+    // 1. Extrai canais para processamento FIR (que exige buffer contíguo)
+    std::vector<float> channelData[2];
+    for (int ch = 0; ch < numChannels; ch++) {
+        channelData[ch].resize(numFrames);
+        if (highFreqBuffer[ch].size() < numFrames) highFreqBuffer[ch].resize(numFrames);
+        
+        for (int i = 0; i < numFrames; i++) {
+            channelData[ch][i] = audioData[i * numChannels + ch];
+        }
+        
+        // 2. Processa FIR High-Pass
+        highPassFir[ch].processBlockOverlapSave(channelData[ch].data(), highFreqBuffer[ch].data(), numFrames);
+    }
 
+    // 3. Loop de Processamento Final (Interleaved)
     for (int i = 0; i < numFrames; i++) {
         for (int ch = 0; ch < numChannels; ch++) {
-            int index = i * numChannels + ch;
-            float sample = audioData[index];
+            float sample = channelData[ch][i];
 
-            // 1. Grave via IIR de Alta Eficiência
-            float lowFreq = lowPass1000Hz.process(sample);
+            // A. Grave via IIR + Retardo para alinhar com o Agudo (Atraso FIR = 256)
+            float lowFreqRaw = lowPass1000Hz[ch].process(sample);
             
-            // 2. Agudo via Array de FIR de Fase Linear Calculado Anteriormente
-            // A leitura é sincronizada por índice em HighFreqBuffer
-            float highFreq = highFreqBuffer[i]; 
+            // Pega amostra antiga (atrasada)
+            int readPtr = (delayWritePtr[ch] - 256 + 512) % 512;
+            float lowFreq = lowFreqDelayBuffer[ch][readPtr];
             
-            // 3. Modulação Não-Linear (TEE - Expansão de Transientes com Gamma=0.7)
-            highFreq = teeProcessor.process(highFreq);
+            // Salva amostra atual no buffer circular
+            lowFreqDelayBuffer[ch][delayWritePtr[ch]] = lowFreqRaw;
+            delayWritePtr[ch] = (delayWritePtr[ch] + 1) % 512;
 
-            // 4. Aplicação do Filtro Sibilante / Sharpening Paramétrico de Banda Estreita (Q=4.32)
-            highFreq = peakingEQ.process(highFreq);
+            // B. Agudo via FIR (já calculado com atraso natural de 256)
+            float highFreq = highFreqBuffer[ch][i]; 
+            
+            // C. Modulação TEE
+            highFreq = teeProcessor[ch].process(highFreq);
 
-            // 5. Soma de Sinal e Restauro Estrutural
+            // D. Peaking EQ
+            highFreq = peakingEQ[ch].process(highFreq);
+
+            // E. Mix e Clipping Limiter Clínico
             float outSample = lowFreq + highFreq;
+            if (outSample > 1.0f) outSample = 1.0f;
+            else if (outSample < -1.0f) outSample = -1.0f;
 
-            // 6. Hard/Soft Limiter Preventivo de Ataque Zero <1ms
-            if (outSample > 0.99f) outSample = 0.99f;
-            else if (outSample < -0.99f) outSample = -0.99f;
-
-            audioData[index] = outSample;
+            audioData[i * numChannels + ch] = outSample;
         }
     }
 }

@@ -13,15 +13,33 @@ class ThresholdTestScreen extends StatefulWidget {
 class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
   final AudioRehabEngine _engine = AudioRehabEngine();
   final List<int> _frequencies = [250, 500, 1000, 2000, 4000, 8000];
+  
+  // Controle de Estado do Teste
+  EarSide _currentEar = EarSide.left;
   int _currentFreqIndex = 0;
   double _currentDb = 40.0;
   bool _heardOnce = false;
   double _lastHeardDb = 40.0;
   
-  final List<AudiometryPoint> _recollectedPoints = [];
+  // Resultados Separados por Orelha
+  final List<AudiometryPoint> _leftEarPoints = [];
+  final List<AudiometryPoint> _rightEarPoints = [];
 
   bool _isTesting = false;
   bool _testFinished = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Inicia o motor para o teste (mesmo que com audiograma em branco inicialmente)
+    _engine.initializeEngine(Audiogram(
+      id: "TEMP_CALIBRATION",
+      patientId: "TEMP_CALIBRATION",
+      date: DateTime.now(),
+      leftEar: [],
+      rightEar: [],
+    ));
+  }
 
   void _startFrequencyTest() async {
     setState(() {
@@ -38,6 +56,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
     _engine.playPureTone(
       frequencyHz: _frequencies[_currentFreqIndex],
       durationMs: 1500,
+      ear: _currentEar,
       dbLevel: _currentDb,
     );
   }
@@ -73,20 +92,41 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
   }
 
   void _recordThresholdAndNext(double thresholdDb) {
-    _recollectedPoints.add(AudiometryPoint(
+    final point = AudiometryPoint(
       frequency: _frequencies[_currentFreqIndex],
       threshold: thresholdDb,
-    ));
+    );
+    
+    if (_currentEar == EarSide.left) {
+      _leftEarPoints.add(point);
+    } else {
+      _rightEarPoints.add(point);
+    }
     
     if (_currentFreqIndex < _frequencies.length - 1) {
+      // Próxima frequência na mesma orelha
       setState(() {
         _currentFreqIndex++;
-        _currentDb = 40.0; // Reset para a pŕoxima frequência
+        _currentDb = 40.0;
         _heardOnce = false;
         _lastHeardDb = 40.0;
       });
       _playCurrentTestTone();
+    } else if (_currentEar == EarSide.left) {
+      // Terminou orelha esquerda, passa para a direita
+      setState(() {
+        _currentEar = EarSide.right;
+        _currentFreqIndex = 0;
+        _currentDb = 40.0;
+        _heardOnce = false;
+        _lastHeardDb = 40.0;
+      });
+      // Pequeno delay antes de começar a outra orelha
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) _playCurrentTestTone();
+      });
     } else {
+      // Terminou ambas
       _finishTest();
     }
   }
@@ -154,9 +194,13 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                       color: Colors.white,
                     ),
                   ),
-                  const Text(
-                    "Frequência de Teste",
-                    style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.w500),
+                  Text(
+                    _currentEar == EarSide.left ? "OUVIDO ESQUERDO" : "OUVIDO DIREITO",
+                    style: TextStyle(
+                      color: _currentEar == EarSide.left ? Colors.blueAccent : Colors.redAccent, 
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 2,
+                    ),
                   ),
                 ],
               ),
@@ -229,17 +273,31 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                     minY: -120, // Inferior (Perda profunda)
                     maxY: 10,   // Superior (Audição excelente)
                     lineBarsData: [
+                      // ORELHA ESQUERDA (AZUL)
                       LineChartBarData(
-                        spots: List.generate(_recollectedPoints.length, (i) => FlSpot(i.toDouble(), -_recollectedPoints[i].threshold)),
+                        spots: List.generate(_leftEarPoints.length, (i) => FlSpot(i.toDouble(), -_leftEarPoints[i].threshold)),
                         isCurved: false,
                         color: Colors.blueAccent,
-                        barWidth: 4,
+                        barWidth: 3,
+                        dotData: const FlDotData(show: true),
+                      ),
+                      // ORELHA DIREITA (VERMELHA)
+                      LineChartBarData(
+                        spots: List.generate(_rightEarPoints.length, (i) => FlSpot(i.toDouble(), -_rightEarPoints[i].threshold)),
+                        isCurved: false,
+                        color: Colors.redAccent,
+                        barWidth: 3,
                         dotData: const FlDotData(show: true),
                       ),
                     ],
                     titlesData: FlTitlesData(
                       topTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: true, reservedSize: 30, getTitlesWidget: _ThresholdTestScreenState._topTitleWidget)
+                        sideTitles: SideTitles(
+                          showTitles: true, 
+                          reservedSize: 30, 
+                          interval: 1, // Impede a repetição de rótulos entre pontos
+                          getTitlesWidget: _ThresholdTestScreenState._topTitleWidget
+                        )
                       ),
                       bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                       rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -247,11 +305,17 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                         sideTitles: SideTitles(
                           showTitles: true,
                           reservedSize: 40,
+                          interval: 20, // Grid clínico padrão de 20dB
                           getTitlesWidget: (value, meta) => Text("${(-value).toInt()}dB", style: const TextStyle(color: Colors.white54, fontSize: 10)),
                         )
                       ),
                     ),
-                    gridData: const FlGridData(show: true, drawVerticalLine: true, horizontalInterval: 20),
+                    gridData: const FlGridData(
+                      show: true, 
+                      drawVerticalLine: true, 
+                      horizontalInterval: 20,
+                      verticalInterval: 1, // Sincroniza grid com frequências
+                    ),
                     borderData: FlBorderData(show: true, border: Border(bottom: BorderSide(color: Colors.white10), left: BorderSide(color: Colors.white10))),
                   ),
                 ),
@@ -266,7 +330,10 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     elevation: 10,
                   ),
-                  onPressed: () => Navigator.pop(context, _recollectedPoints), 
+                  onPressed: () => Navigator.pop(context, {
+                    'left': _leftEarPoints,
+                    'right': _rightEarPoints,
+                  }), 
                   child: const Text("SALVAR E VOLTAR", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                 ),
               ),

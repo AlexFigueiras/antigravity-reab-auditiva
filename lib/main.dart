@@ -114,66 +114,93 @@ class _TrainingDashboardState extends State<TrainingDashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        "DASHBOARD CLÍNICO",
-                        style: TextStyle(
-                          letterSpacing: 4,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey,
-                          fontSize: 12,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "DASHBOARD CLÍNICO",
+                          style: TextStyle(
+                            letterSpacing: 4,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey,
+                            fontSize: 10,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        "Reabilitação de Plasticidade Neural",
-                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        const Text(
+                          "Reabilitação Neural",
+                          style: TextStyle(
+                            fontSize: 26, 
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.5,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.tune, color: Colors.blueAccent),
-                    onPressed: () async {
-                      final result = await Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const ThresholdTestScreen()),
-                      );
-                      
-                      if (result != null && result is List<AudiometryPoint>) {
-                        setState(() {
-                          _mockAudiogram.rightEar = result;
-                        });
-                      }
-                    },
-                    tooltip: "Calibrar Audiograma",
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.blueAccent.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: TextButton.icon(
+                      icon: const Icon(Icons.hearing, color: Colors.blueAccent),
+                      label: const Text("TESTAR", style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold)),
+                      onPressed: () async {
+                        final result = await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const ThresholdTestScreen()),
+                        );
+                        
+                        if (result != null && result is Map<String, dynamic>) {
+                          setState(() {
+                            if (result.containsKey('left')) {
+                              _mockAudiogram.leftEar = result['left'] as List<AudiometryPoint>;
+                            }
+                            if (result.containsKey('right')) {
+                              _mockAudiogram.rightEar = result['right'] as List<AudiometryPoint>;
+                            }
+                          });
+                        }
+                      },
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 32),
               
               // Widget Gráfico de Audiograma (fl_chart)
-              Expanded(
-                flex: 3,
+              SizedBox(
+                height: 250,
                 child: Container(
                   decoration: BoxDecoration(
                     color: const Color(0xFF16161A),
                     borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
                   padding: const EdgeInsets.fromLTRB(16, 24, 32, 16),
                   child: LineChart(
                     LineChartData(
-                      minY: -10,
-                      maxY: 120,
+                      minY: -120, // Padrão clínico: perdas maiores para baixo
+                      maxY: 10,
                       backgroundColor: Colors.transparent,
                       lineBarsData: [
                         _generateLine(EarSide.left),
@@ -185,6 +212,7 @@ class _TrainingDashboardState extends State<TrainingDashboard> {
                         bottomTitles: AxisTitles(
                           sideTitles: SideTitles(
                             showTitles: true,
+                            interval: 1, // Evita repetição de labels entre os índices
                               getTitlesWidget: (value, meta) => Padding(
                                 padding: const EdgeInsets.only(top: 8.0),
                                 child: Text(
@@ -198,7 +226,7 @@ class _TrainingDashboardState extends State<TrainingDashboard> {
                           sideTitles: SideTitles(
                             showTitles: true,
                             getTitlesWidget: (value, meta) => Text(
-                              "${value.toInt()}dB",
+                              "${(-value).toInt()}dB",
                               style: const TextStyle(fontSize: 10, color: Colors.grey),
                             ),
                           ),
@@ -215,8 +243,8 @@ class _TrainingDashboardState extends State<TrainingDashboard> {
               const SizedBox(height: 12),
               
               // Bloco de Tendências Clínicas
-              Expanded(
-                flex: 2,
+              SizedBox(
+                height: 180,
                 child: Container(
                   decoration: BoxDecoration(
                     color: const Color(0xFF16161A),
@@ -280,7 +308,17 @@ class _TrainingDashboardState extends State<TrainingDashboard> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
                         onPressed: _togglePlay,
-                        child: Text(_isPlaying ? "PARAR TREINO" : "INICIAR TREINO NEURAL"),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(_isPlaying ? Icons.stop_rounded : Icons.play_arrow_rounded),
+                            const SizedBox(width: 8),
+                            Text(
+                              _isPlaying ? "PARAR TREINO" : "INICIAR TREINO NEURAL",
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -307,9 +345,15 @@ class _TrainingDashboardState extends State<TrainingDashboard> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(
-                              "NÍVEL 2: DISCRIMINAÇÃO FONÊMICA", 
-                              style: TextStyle(color: _unlockedLevel >= 2 ? Colors.blueAccent : Colors.white24),
+                            Flexible(
+                              child: Text(
+                                "NÍVEL 2: DISCRIMINAÇÃO FONÊMICA", 
+                                style: TextStyle(
+                                  color: _unlockedLevel >= 2 ? Colors.blueAccent : Colors.white24,
+                                  fontSize: 13,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                             if (_unlockedLevel < 2) 
                               const Padding(
@@ -401,8 +445,9 @@ class _TrainingDashboardState extends State<TrainingDashboard> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   LineChartBarData _generateLine(EarSide side) {
     final List<AudiometryPoint> points = (side == EarSide.left) ? _mockAudiogram.leftEar : _mockAudiogram.rightEar;
@@ -411,8 +456,9 @@ class _TrainingDashboardState extends State<TrainingDashboard> {
       color: side == EarSide.left ? const Color(0xFF2563EB) : const Color(0xFFE11D48),
       barWidth: 3,
       dotData: const FlDotData(show: true),
-      // Usamos o índice (0, 1, 2...) para que 250Hz -> 8000Hz fiquem equidistante
-      spots: List.generate(points.length, (i) => FlSpot(i.toDouble(), points[i].threshold)),
+      // Usamos o índice (0, 1, 2...) para que 250Hz -> 8000Hz fiquem equidistantes
+      // Invertemos o valor para que maior perda fique para baixo (padrão clínico)
+      spots: List.generate(points.length, (i) => FlSpot(i.toDouble(), -points[i].threshold)),
     );
   }
 

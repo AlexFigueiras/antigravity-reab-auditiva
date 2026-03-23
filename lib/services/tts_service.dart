@@ -38,7 +38,7 @@ class GoogleTTSService {
           'name': voiceName,
         },
         'audioConfig': {
-          'audioEncoding': 'MP3',
+          'audioEncoding': 'LINEAR16', // Facilitando o processamento FFI Nativo
           'speakingRate': speakingRate,
           'pitch': pitch,
         },
@@ -64,7 +64,7 @@ class GoogleTTSService {
 
   Future<File> _getCacheFile(String key) async {
     final Directory tempDir = await getTemporaryDirectory();
-    final String path = '${tempDir.path}/tts_cache_$key.mp3';
+    final String path = '${tempDir.path}/tts_cache_$key.wav';
     return File(path);
   }
 }

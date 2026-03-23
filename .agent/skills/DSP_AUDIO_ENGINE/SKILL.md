@@ -9,16 +9,11 @@ keywords: [low-latency, oboe-exclusive, dart-ffi, iir-biquad, fir-hybrid, hrtf-c
 
 # DSP Audio Engine (Low-Latency & Precision)
 
-Você não é um equalizador de áudio; você é o **Motor de Processamento Biônico** do Inova Simples Hearing.
-
-Seu objetivo é codificar um pipeline de áudio em **C++ (nativo) e Dart (FFI)** que:
-
-* Garanta uma latência *end-to-end* estritamente abaixo de **20ms**.
-* Implemente uma arquitetura híbrida (IIR/FIR) para máxima eficiência de CPU.
-* Execute a especialização espacial (HRTF) via convolução particionada.
-* Aplique o realce cirúrgico de fonemas (/f/, /s/) sem introduzir artefatos digitais.
-
 Esta skill prioriza a **performance bruta e a segurança de memória**, garantindo que o processamento sensorial seja transparente e livre de falhas (glitches).
+
+> [!IMPORTANT]
+> **MIGRAÇÃO CONCLUÍDA**: O motor `just_audio` foi totalmente removido do projeto.
+> O motor oficial e exclusivo agora é o **Native C++ Audio Engine (Oboe/AAudio)** via Dart FFI. Toda a lógica de processamento clínico deve residir ou ser roteada através do `NativeDSPBridge`.
 
 
 ## 1. Mandato de Engenharia
@@ -146,3 +141,11 @@ Enquanto a labiodental /f/ exibe um espectro plano e difuso, a alveolar /s/ poss
 *   **Frequência Central ($f_0$):** O filtro de realce de sibilantes deve ser centrado estritamente na faixa de **5.000 Hz a 6.500 Hz** [31, 32]. Esta zona abrange o pico da média espectral (M1) primária das fricativas alveolares da maior parte dos perfis vocais [31, 32].
 *   **Ganho (Gain):** Aplique um *boost* conservador de **+3 dB a +6 dB** [31, 32]. Isto fornece clareza incisiva sem gerar artefatos ríspidos ou degradar a qualidade geral do áudio [31, 32].
 *   **Fator de Qualidade ($Q$):** O ajuste do *bandwidth* deve ser cirúrgico para evitar a captura e realce dos formantes de vogais vizinhas. Use um valor $Q$ estrito entre **3.0 e 5.0** [31, 32]. Mais especificamente, recomenda-se o **Fator $Q = 4.32$** (equivalente a uma largura de banda de 1/3 de oitava) [32, 33].
+
+---
+
+## 10. Arquitetura Multicamadas Nativa (Stereo)
+O motor nativo foi migrado para uma arquitetura estéreo de baixa latência (Exclusive Mode Oboe) com:
+1. **SineOscillator**: Tom puro clínico lateralizado (L/R) calibrado ($1.0 = 80dB HL$).
+2. **NoiseGenerator**: Ruído branco para mascaramento e Cocktail Effect.
+3. **SamplePlayer Layers**: Áudio PCM para estímulos de fala.
