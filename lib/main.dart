@@ -3,6 +3,11 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:ear_training/audio_engine/audio_engine.dart';
 import 'package:ear_training/models/audiogram.dart';
 import 'package:ear_training/screens/threshold_test_screen.dart';
+import 'package:ear_training/screens/phonemic_discrimination_screen.dart';
+import 'package:ear_training/screens/spatial_attention_screen.dart';
+import 'package:ear_training/screens/speech_in_noise_screen.dart';
+import 'package:ear_training/screens/widgets/rehab_trends_chart.dart';
+import 'package:ear_training/models/rehab_session.dart';
 import 'package:ear_training/services/supabase_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
@@ -41,8 +46,11 @@ class TrainingDashboard extends StatefulWidget {
 
 class _TrainingDashboardState extends State<TrainingDashboard> {
   final AudioRehabEngine _engine = AudioRehabEngine();
+  final SupabaseService _supabase = SupabaseService();
   double _snr = 10.0;
   bool _isPlaying = false;
+  List<RehabSession> _history = [];
+  int _unlockedLevel = 1;
 
   // Mock Audiogram para demonstração
   Audiogram _mockAudiogram = Audiogram(
@@ -71,6 +79,19 @@ class _TrainingDashboardState extends State<TrainingDashboard> {
   void initState() {
     super.initState();
     _engine.initializeEngine(_mockAudiogram);
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    try {
+      final history = await _supabase.getRehabHistory(_mockAudiogram.patientId);
+      setState(() {
+        _history = history;
+        _unlockedLevel = RehabSession.calculateUnlockedLevel(history);
+      });
+    } catch (e) {
+      print("Erro ao carregar histórico: $e");
+    }
   }
 
   void _togglePlay() async {
@@ -184,9 +205,26 @@ class _TrainingDashboardState extends State<TrainingDashboard> {
                         ),
                       ),
                       gridData: const FlGridData(show: true, drawVerticalLine: true, horizontalInterval: 20),
-                      borderData: FlBorderData(show: false),
                     ),
                   ),
+                ),
+              ),
+              const SizedBox(height: 32),
+
+              const Text("ANÁLISE DE PROGRESSO", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 2, color: Colors.grey)),
+              const SizedBox(height: 12),
+              
+              // Bloco de Tendências Clínicas
+              Expanded(
+                flex: 2,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF16161A),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withOpacity(0.05)),
+                  ),
+                  padding: const EdgeInsets.all(20),
+                  child: RehabTrendsChart(sessions: _history),
                 ),
               ),
               
@@ -212,6 +250,13 @@ class _TrainingDashboardState extends State<TrainingDashboard> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      "Instrução: Foque na voz principal (Sinal) e esforce-se para ignorar o ruído de fundo. "
+                      "Ajuste o controle (SNR) para deixar a voz mais alta que o ruído (+dB) ou mais abafada que o ruído (-dB), desafiando seu cérebro.",
+                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                      textAlign: TextAlign.justify,
+                    ),
                     const SizedBox(height: 16),
                     Slider(
                       value: _snr,
@@ -236,6 +281,117 @@ class _TrainingDashboardState extends State<TrainingDashboard> {
                         ),
                         onPressed: _togglePlay,
                         child: Text(_isPlaying ? "PARAR TREINO" : "INICIAR TREINO NEURAL"),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(
+                            color: _unlockedLevel >= 2 ? Colors.blueAccent : Colors.white10,
+                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: _unlockedLevel >= 2 
+                          ? () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => PhonemicDiscriminationScreen(audiogram: _mockAudiogram),
+                                ),
+                              ).then((_) => _loadHistory()); // Recarregar após o exercício
+                            }
+                          : null, // Bloqueado
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              "NÍVEL 2: DISCRIMINAÇÃO FONÊMICA", 
+                              style: TextStyle(color: _unlockedLevel >= 2 ? Colors.blueAccent : Colors.white24),
+                            ),
+                            if (_unlockedLevel < 2) 
+                              const Padding(
+                                padding: EdgeInsets.only(left: 8.0),
+                                child: Icon(Icons.lock_outline, size: 16, color: Colors.white24),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(
+                            color: _unlockedLevel >= 3 ? Colors.purpleAccent : Colors.white10,
+                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: _unlockedLevel >= 3 
+                          ? () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => SpatialAttentionScreen(audiogram: _mockAudiogram),
+                                ),
+                              ).then((_) => _loadHistory());
+                            }
+                          : null,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              "NÍVEL 3: ATENÇÃO ESPACIAL", 
+                              style: TextStyle(color: _unlockedLevel >= 3 ? Colors.purpleAccent : Colors.white24),
+                            ),
+                            if (_unlockedLevel < 3) 
+                              const Padding(
+                                padding: EdgeInsets.only(left: 8.0),
+                                child: Icon(Icons.lock_outline, size: 16, color: Colors.white24),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(
+                            color: _unlockedLevel >= 4 ? Colors.orangeAccent : Colors.white10,
+                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: _unlockedLevel >= 4 
+                          ? () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => SpeechInNoiseScreen(audiogram: _mockAudiogram),
+                                ),
+                              ).then((_) => _loadHistory());
+                            }
+                          : null,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              "NÍVEL 4: EFEITO COQUETEL", 
+                              style: TextStyle(color: _unlockedLevel >= 4 ? Colors.orangeAccent : Colors.white24),
+                            ),
+                            if (_unlockedLevel < 4) 
+                              const Padding(
+                                padding: EdgeInsets.only(left: 8.0),
+                                child: Icon(Icons.lock_outline, size: 16, color: Colors.white24),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ],

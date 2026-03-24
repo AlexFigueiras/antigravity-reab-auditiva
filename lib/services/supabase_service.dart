@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/audiogram.dart';
+import '../models/rehab_session.dart';
 
 /// Serviço Responsável pela Persistência e Segurança [SEGURANÇA/INFRA]
 /// Aplica as regras de integridade e comunicação com o Supabase.
@@ -48,5 +49,27 @@ class SupabaseService {
         .order('created_at', ascending: false);
 
     return response.map((data) => Audiogram.fromJson(data)).toList();
+  }
+
+  /// Salva uma sessão de reabilitação [SSOT/SEGURANÇA]
+  Future<void> saveRehabSession(RehabSession session) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) throw Exception("Usuário não autenticado.");
+
+    await Supabase.instance.client.from('rehab_sessions').insert({
+      ...session.toJson(),
+      'user_id': user.id, // Vínculo obrigatório para RLS
+    });
+  }
+
+  /// Recupera o histórico de sessões de reabilitação [TELEMETRIA]
+  Future<List<RehabSession>> getRehabHistory(String patientId) async {
+    final List<dynamic> response = await Supabase.instance.client
+        .from('rehab_sessions')
+        .select()
+        .eq('patient_id', patientId)
+        .order('date', ascending: true);
+
+    return response.map((data) => RehabSession.fromJson(data)).toList();
   }
 }

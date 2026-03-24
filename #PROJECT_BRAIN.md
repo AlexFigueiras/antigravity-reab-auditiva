@@ -16,6 +16,11 @@ Progressão terapêutica contínua guiando o cérebro do silêncio ao caos contr
 *   **Nível 3 (Áudio Espacial / Atenção Auditiva):** Introdução de estímulos lateralizados. O paciente precisa identificar a origem do som (Direita/Esquerda/Centro). Utiliza plugins de áudio binaural do Flutter/Motor Nativo.
 *   **Nível 4 (O Efeito Coquetel - Speech in Noise):** Introdução dinâmica de ruído de fundo (Babble Noise, White Noise, ruído de restaurante). A Relação Sinal-Ruído (SNR - Signal to Noise Ratio) é ajustada algoritmicamente: inicia com o sinal-alvo +15dB acima do ruído e reduz gradativamente até 0dB ou negativo, conforme a curva de aprendizagem e plasticidade do paciente.
 
+### Detalhamento Técnico: Nível 2 (Discriminação Fonêmica)
+*   **Lógica de Randomização:** O sistema executará o sorteio de pares mínimos difíceis (ex: pares f/s, p/t) de uma fonte estruturada. A cada rodada, o motor selecionará um áudio Alvo e organizará opções em tela cujo posicionamento será embaralhado clinicamente (via `List.shuffle()`) para evitar adaptação por viés de posição visual.
+*   **Filtros de Áudio em Tempo Real:** Conforme a Global Rule, o `AudioRehabEngine` orquestrará filtros clínicos (High-Pass/Equalizador), aplicando ganho (*boost*) estritamente nas frequências deficitárias identificadas pelo audiograma, reduzindo graves para evitar mascaramento ascendente. O normalizador de ganho atuará logo antes da saída para mitigar distorções e preservar a integridade coclear do paciente.
+*   **Telemetria e Supabase (SSOT):** Os Acertos, Erros e Tempos de Reação serão consolidados. Ao concluir o nível ou sob *checkpoint*, o agregador fará a persistência no Supabase em tabela designada (ex: `rehab_sessions`). A inserção é submetida rigorosamente sob a política RLS passando o `user_id` atrelado ao Auth token, garantindo que o prontuário seja impenetrável transversalmente (LGPD/HIPAA).
+
 ## 4. Stack Técnica & Conectores Antigravity
 *   **Frontend:** Flutter/Dart (Mobile Nativo - iOS/Android).
     *   *Libs Base:* `audio_session` (gerência de foco de áudio OS), `just_audio` / `soloud` ou FFI direto para DSP.
@@ -48,3 +53,13 @@ De acordo com as diretrizes globais do projeto:
 2. **Setup DB:** Executar `supabase_setup.sql` no painel do Supabase.
 3. **Nível 2 (Discriminação Fonêmica):** Colocar listas de palavras (wav/mp3) em `assets/audio/` e implementar UI de treino.
 4. **UX/UI:** Melhorar o feedback visual durante o teste de limiar (micro-animações de onda).
+
+
+5. Gestão Proativa de Skills
+Para maximizar a eficiência e evitar reencapsulamento de código:
+
+Consulta Obrigatória: Antes de qualquer implementação, o agente deve escanear o skills-library/catalog.md.
+
+Gatilho de Ação (Proatividade): Se uma skill relevante for encontrada, o agente deve interromper o raciocínio e dizer: "Identifiquei que a skill [NOME-DA-SKILL] resolve esta tarefa. Por favor, forneça o conteúdo do arquivo archives/nome_da_skill.dart para que eu possa aplicar a lógica (X-Copy)."
+
+Manutenção: Ao criar uma solução inédita e robusta, o agente deve sugerir ao [ORQUESTRADOR] a criação de uma nova entrada no catálogo.

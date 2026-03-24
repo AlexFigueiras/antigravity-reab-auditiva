@@ -43,8 +43,8 @@ class Audiogram {
   final String id;
   final String patientId;
   final DateTime date;
-  final List<AudiometryPoint> leftEar;
-  final List<AudiometryPoint> rightEar;
+  List<AudiometryPoint> leftEar;
+  List<AudiometryPoint> rightEar;
   final String? notes;
 
   Audiogram({

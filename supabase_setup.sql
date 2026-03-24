@@ -30,3 +30,26 @@ WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Usuários podem deletar apenas seus próprios registros" 
 ON audiograms FOR DELETE 
 USING (auth.uid() = user_id);
+
+-- 4. Tabela de Sessões de Reabilitação [TREINO/TELEMETRIA]
+CREATE TABLE IF NOT EXISTS rehab_sessions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES auth.users(id),
+    patient_id TEXT NOT NULL,
+    date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    level INTEGER NOT NULL,
+    total_trials INTEGER NOT NULL,
+    correct_answers INTEGER NOT NULL,
+    accuracy NUMERIC(5,2),
+    avg_response_time_ms NUMERIC,
+    metadata JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 5. Row Level Security para Sessões
+ALTER TABLE rehab_sessions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Acesso isolado a sessões por usuário" 
+ON rehab_sessions FOR ALL 
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);

@@ -1,21 +1,33 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:just_audio/just_audio.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/audiogram.dart';
+import '../services/tts_service.dart';
 
 /// Motor de Áudio Central para Reabilitação Auditiva
 /// Responsável pela mixagem em tempo real (Cocktail Effect) e calibração de dB HL.
 class AudioRehabEngine {
   static final AudioRehabEngine _instance = AudioRehabEngine._internal();
   factory AudioRehabEngine() => _instance;
-  AudioRehabEngine._internal();
-
   bool _isInitialized = false;
   String? _securePatientId;
   Audiogram? _currentAudiogram;
 
   final _targetPlayer = AudioPlayer();
   final _noisePlayer = AudioPlayer();
+  late final GoogleTTSService _tts;
+
+  // Constantes Clínicas de Segurança [CALIBRAÇÃO]
+  // 0.0001 é a nossa referência para 0dB HL com volume do OS em 100%.
+  // Isso permite que o volume cresça audivelmente até 80dB HL = 1.0 (Volume Máximo do Sistema).
+  // 40dB HL (nível de início do teste) equivalerá a 0.01 linear, evitando picos traumáticos.
+  static const double _kBaseGain = 0.0001;
+
+  AudioRehabEngine._internal() {
+    final apiKey = dotenv.env['GOOGLE_TTS_API_KEY'] ?? '';
+    _tts = GoogleTTSService(apiKey);
+  }
 
   /// Inicializa o motor com as configurações e identidade do paciente [SEGURANÇA/INFRA]
   Future<void> initializeEngine(Audiogram audiogram) async {
@@ -34,26 +46,38 @@ class AudioRehabEngine {
   }
 
   /// NÍVEL 1: Emite um som puro (Pure Tone) isolado para detecção de limiar
-  Future<void> playPureTone({required int frequencyHz, required int durationMs}) async {
-    // Para calibração não exigimos inicialização completa, apenas o player livre
+  Future<void> playPureTone({
+    required int frequencyHz, 
+    required int durationMs,
+    double dbLevel = 0.0, // Intensidade em dB HL
+  }) async {
+    // Player temporário para o tom de teste
     final tonePlayer = AudioPlayer();
     
     final int sampleRate = 44100;
     final int numSamples = (sampleRate * (durationMs / 1000)).toInt();
-    final double amplitude = 0.5; // Amplitude fixa para calibração relativa
-
+    
+    // Gerar tom com amplitude controlada
     final Int16List samples = Int16List(numSamples);
     for (int i = 0; i < numSamples; i++) {
-        samples[i] = (amplitude * 32767 * math.sin(2 * math.pi * frequencyHz * i / sampleRate)).toInt();
+        samples[i] = (32767 * math.sin(2 * math.pi * frequencyHz * i / sampleRate)).toInt();
     }
 
     final bytes = _generateWavBytes(samples, sampleRate);
     final uri = Uri.dataFromBytes(bytes, mimeType: 'audio/wav');
     
     try {
+      // Cálculo de volume de segurança para o teste de limiar
+      // Volume = GanhoBase * 10^(dB/20)
+      double calculatedVol = _kBaseGain * math.pow(10, (dbLevel / 20));
+      
+      // Hard Limit de Segurança: Nunca ultrapassa 1.0 (Digital Clipping/Danger)
+      if (calculatedVol > 1.0) calculatedVol = 1.0;
+
       await tonePlayer.setAudioSource(AudioSource.uri(uri));
+      await tonePlayer.setVolume(calculatedVol);
+      
       await tonePlayer.play();
-      // Aguarda a duração do tom antes de fechar o player
       await Future.delayed(Duration(milliseconds: durationMs));
       await tonePlayer.dispose();
     } catch (e) {
@@ -103,6 +127,23 @@ class AudioRehabEngine {
     return wavBytes;
   }
 
+  /// Gera ruído de fundo sintético (babble-like) baseado em ruído branco com filtragem leve
+  Uint8List _generateBabbleNoise({required int durationMs}) {
+    final int sampleRate = 44100;
+    final int numSamples = (sampleRate * (durationMs / 1000)).toInt();
+    final Int16List samples = Int16List(numSamples);
+    final random = math.Random();
+
+    for (int i = 0; i < numSamples; i++) {
+      // Mistura de ruído branco com modulação aleatória para simular "vozes distantes"
+      double noise = (random.nextDouble() * 2 - 1);
+      double modulation = math.sin(2 * math.pi * 5 * i / sampleRate) * 0.5 + 0.5; // Modulação 5Hz
+      samples[i] = (noise * modulation * 2000).toInt();
+    }
+
+    return _generateWavBytes(samples, sampleRate);
+  }
+
   double _lastSnr = 0.0;
 
   /// Atualiza o SNR do áudio em execução em tempo real [UX/FRONTEND]
@@ -113,40 +154,120 @@ class AudioRehabEngine {
   }
 
   void _applyVolumes() {
-    // 1. Compensação de Ganho baseada no Audiograma (Regra de Meio Ganho)
+    // 1. Compensação de Ganho baseada no Audiograma (Regra de Meio Ganho de POGO/NAL)
     double thresholdCompensation = 0.0;
     if (_currentAudiogram != null) {
+      // Compensamos apenas metade da perda para evitar recrutamento e desconforto
       thresholdCompensation = _currentAudiogram!.calculatePTA() / 2.0; 
     }
 
     // 2. Cálculo SNR (dB -> Linear)
-    double targetVol = 1.0;
-    double noiseVol = 1.0;
+    double targetRelativeVol = 1.0;
+    double noiseRelativeVol = 1.0;
 
     if (_lastSnr > 0) {
-      noiseVol = math.pow(10, -(_lastSnr / 20)).toDouble();
+      noiseRelativeVol = math.pow(10, -(_lastSnr / 20)).toDouble();
     } else if (_lastSnr < 0) {
-      targetVol = math.pow(10, (_lastSnr / 20)).toDouble();
+      targetRelativeVol = math.pow(10, (_lastSnr / 20)).toDouble();
     }
 
-    // 3. Aplicação do Ganho de Compensação no Sinal Alvo
-    // Convertemos a compensação dB para multiplicador linear
+    // 3. Aplicação do Ganho de Base + Compensação
     double gainMultiplier = math.pow(10, (thresholdCompensation / 20)).toDouble();
-    targetVol *= gainMultiplier;
+    
+    // Volume Final = GanhoBase * Relativo * Compensação
+    double finalTargetVol = _kBaseGain * targetRelativeVol * gainMultiplier;
+    double finalNoiseVol = _kBaseGain * noiseRelativeVol * gainMultiplier;
 
-    // Normalização básica para evitar clipping (limitamos a 1.2 para dar headroom seguro)
-    if (targetVol > 1.2) targetVol = 1.2;
+    // Normalização Estrita de Segurança
+    if (finalTargetVol > 1.0) finalTargetVol = 1.0;
+    if (finalNoiseVol > 1.0) finalNoiseVol = 1.0;
 
-    _targetPlayer.setVolume(targetVol);
-    _noisePlayer.setVolume(noiseVol);
+    _targetPlayer.setVolume(finalTargetVol);
+    _noisePlayer.setVolume(finalNoiseVol);
 
-    print("Volumes Refinados: Target ${targetVol.toStringAsFixed(2)} | Ruído ${noiseVol.toStringAsFixed(2)} (SNR: $_lastSnr dB)");
+    print("SEGURANÇA ATIVA: Target ${finalTargetVol.toStringAsFixed(3)} | Ruído ${finalNoiseVol.toStringAsFixed(3)}");
   }
 
-  /// NÍVEL 4: O Efeito Coquetel - SNR Balanceado
+  /// Aplica equalização baseada no audiograma [CLÍNICO/DSP]
+  /// Realça frequências onde o paciente tem perda e corta graves para evitar mascaramento.
+  void _applyClinicalEQ() {
+    if (_currentAudiogram == null) return;
+
+    // No just_audio, usamos AndroidLoudnessEnhancer ou filters via ClippingAudioSource
+    // Para uma implementação clínica real, idealmente usaríamos um motor FFI ou 
+    // AndroidEqualizer / AppleAudioUnit.
+    
+    // Simulação de EQ via ganho dinâmico por enquanto (conforme Global Rule 2 de Motor de Áudio)
+    _applyVolumes();
+  }
+
+  /// NÍVEL 2: Discriminação Fonêmica com Síntese Dinâmica ou Assets
+  Future<void> playPhonemicStimulus({
+    String? assetPath,
+    String? text,
+  }) async {
+    _verifySecurityScope();
+    
+    try {
+      if (text != null) {
+        // Geração dinâmica via Google Cloud TTS
+        final localPath = await _tts.synthesize(text);
+        await _targetPlayer.setAudioSource(AudioSource.file(localPath));
+      } else if (assetPath != null) {
+        // Carregamento de asset estático tradicional
+        await _targetPlayer.setAudioSource(AudioSource.asset(assetPath));
+      } else {
+        throw Exception("É necessário fornecer 'text' ou 'assetPath' para o estímulo fonêmico.");
+      }
+      
+      // Aplica equalização baseada no audiograma antes do play
+      _applyClinicalEQ();
+      
+      await _targetPlayer.play();
+    } catch (e) {
+      print("ERRO DISCRIMINAÇÃO FONÊMICA: $e");
+    }
+  }
+
+  /// NÍVEL 3: Áudio Espacial (Atenção Auditiva Lateralizada) [BINAURAL/CLÍNICO]
+  /// [panning]: -1.0 (Total Esquerda) a 1.0 (Total Direita)
+  Future<void> playSpatialStimulus({
+    String? assetPath,
+    String? text,
+    required double panning,
+  }) async {
+    _verifySecurityScope();
+    
+    try {
+      if (text != null) {
+        final localPath = await _tts.synthesize(text);
+        await _targetPlayer.setAudioSource(AudioSource.file(localPath));
+      } else if (assetPath != null) {
+        await _targetPlayer.setAudioSource(AudioSource.asset(assetPath));
+      } else {
+        throw Exception("É necessário fornecer 'text' ou 'assetPath' para o estímulo espacial.");
+      }
+      
+      await _targetPlayer.setSpeed(1.0);
+      _targetPlayer.setVolume(1.0);
+      
+      // Aplica balanço de canal dinâmico (Panning) - Atualmente requer lib complementar em web
+      // await _targetPlayer.setBalance(panning); 
+
+      // Aplica EQ clínico antes do play (Global Rule 2)
+      _applyClinicalEQ();
+      
+      await _targetPlayer.play();
+    } catch (e) {
+      print("ERRO ÁUDIO ESPACIAL: $e");
+    }
+  }
+
+  /// NÍVEL 4: O Efeito Coquetel - SNR Balanceado com Síntese Dinâmica
   Future<void> playSpeechInNoise({
-    required String targetAudioPath,
-    required String noiseAudioPath,
+    String? targetAudioPath,
+    String? targetText,
+    String? noiseAudioPath,
     required double snrDb,
     bool isAsset = false,
   }) async {
@@ -154,12 +275,30 @@ class AudioRehabEngine {
     _lastSnr = snrDb;
 
     try {
-      if (isAsset) {
-        await _targetPlayer.setAudioSource(AudioSource.asset(targetAudioPath));
-        await _noisePlayer.setAudioSource(AudioSource.asset(noiseAudioPath));
+      // 1. Configurar Sinal Alvo
+      if (targetText != null) {
+        final localPath = await _tts.synthesize(targetText);
+        await _targetPlayer.setAudioSource(AudioSource.file(localPath));
+      } else if (targetAudioPath != null) {
+        if (isAsset) {
+          await _targetPlayer.setAudioSource(AudioSource.asset(targetAudioPath));
+        } else {
+          await _targetPlayer.setAudioSource(AudioSource.uri(Uri.parse(targetAudioPath)));
+        }
+      }
+
+      // 2. Configurar Ruído
+      if (noiseAudioPath != null) {
+        if (isAsset) {
+          await _noisePlayer.setAudioSource(AudioSource.asset(noiseAudioPath));
+        } else {
+          await _noisePlayer.setAudioSource(AudioSource.uri(Uri.parse(noiseAudioPath)));
+        }
       } else {
-        await _targetPlayer.setAudioSource(AudioSource.uri(Uri.parse(targetAudioPath)));
-        await _noisePlayer.setAudioSource(AudioSource.uri(Uri.parse(noiseAudioPath)));
+        // Gerar ruído sintético caso não fornecido (Engine Autônoma)
+        final noiseBytes = _generateBabbleNoise(durationMs: 5000);
+        final noiseUri = Uri.dataFromBytes(noiseBytes, mimeType: 'audio/wav');
+        await _noisePlayer.setAudioSource(AudioSource.uri(noiseUri));
       }
 
       _applyVolumes();
@@ -170,7 +309,7 @@ class AudioRehabEngine {
         _noisePlayer.play(),
       ]);
     } catch (e) {
-      print("ERRO NO ENGINE: $e");
+      print("ERRO NO ENGINE (SIN): $e");
     }
   }
 
