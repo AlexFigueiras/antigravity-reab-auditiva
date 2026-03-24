@@ -1,0 +1,18 @@
+--- DIAGNOSTICO FLUTTER --- 
+Data/Hora: 23/03/2026 22:35:44,56 
+ 
+--- PATH --- 
+C:\Program Files\Microsoft\jdk-21.0.10.7-hotspot\bin;C:\Program Files\Microsoft\jdk-21.0.10.7-hotspot\bin;C:\Program Files (x86)\Common Files\Oracle\Java\java8path;C:\Program Files (x86)\Common Files\Oracle\Java\javapath;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\Microsoft SQL Server\110\Tools\Binn\;C:\Program Files\Microsoft SQL Server\120\Tools\Binn\;C:\Program Files\Common Files\Autodesk Shared\;C:\Program Files\dotnet\;C:\Program Files (x86)\NVIDIA Corporation\PhysX\Common;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\Git\cmd;C:\Stripe;C:\Program Files\nodejs\;C:\Users\Pc direito\AppData\Local\Microsoft\WindowsApps;C:\Users\Pc direito\AppData\Local\Muse Hub\lib;C:\Users\Pc direito\AppData\Local\GitHubDesktop\bin;C:\Users\Pc direito\AppData\Local\Programs\Antigravity\bin;C:\Users\Pc direito\AppData\Roaming\npm 
+ 
+--- WHERE FLUTTER --- 
+INFORMAÄÂES: n∆o foi poss°vel localizar arquivos para o(s) padr∆o(‰es) especificado(s).
+ 
+--- BUSCA NO DISCO C (DIRETO) --- 
+Nao encontrado em C:\flutter\bin 
+ 
+--- BUSCA NO DISCO D (DIRETO) --- 
+Nao encontrado em D:\flutter\bin 
+ 
+--- USUARIO ATUAL --- 
+administrator\pc direito
+--- FIM --- 
