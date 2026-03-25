@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../audio_engine/audio_engine.dart';
+import '../audio_engine/native_engine.dart';
 import '../models/audiogram.dart';
 import '../models/rehab_session.dart';
 import '../models/phonemic_pair.dart';
@@ -16,7 +17,10 @@ class PhonemicDiscriminationScreen extends StatefulWidget {
 
 class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScreen> {
   final AudioRehabEngine _engine = AudioRehabEngine();
+  final NativeDSPBridge _hardwareBridge = NativeDSPBridge();
   final SupabaseService _supabase = SupabaseService();
+  bool _isHardwareActive = false;
+
   
   int _currentTrial = 0;
   final int _maxTrials = 10;
@@ -97,12 +101,47 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
   }
 
   @override
+  void dispose() {
+    _hardwareBridge.dispose();
+    super.dispose();
+  }
+
+  void _toggleHardwareEngine() {
+    setState(() {
+      if (_isHardwareActive) {
+        _hardwareBridge.stopHardwareAudio();
+        _isHardwareActive = false;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Motor C++: DESLIGADO")));
+      } else {
+        bool started = _hardwareBridge.startHardwareAudio();
+        _isHardwareActive = started;
+        if (!started) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Erro ao inicializar DSP de Hardware.")));
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Motor C++ (Oboe/TEE) ATIVO!")));
+        }
+      }
+    });
+  }
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D0F),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         title: const Text("NÍVEL 2: PROCESSO FONÊMICO"),
+        actions: [
+          // Hardware Native Hook Toggle
+          IconButton(
+            icon: Icon(
+              Icons.memory, 
+              color: _isHardwareActive ? Colors.greenAccent : Colors.grey,
+            ),
+            tooltip: 'Ligar Processador DSP Biônico',
+            onPressed: _toggleHardwareEngine,
+          ),
+          const SizedBox(width: 16),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(4),
           child: LinearProgressIndicator(
