@@ -60,6 +60,10 @@ oboe::DataCallbackResult OboeEngine::onAudioReady(
     float *floatData = static_cast<float *>(audioData);
     
     // MIXER NATIVO (Zero Latency Synthesis)
+    float panningValue = targetPanning.load();
+    float leftGain = (panningValue <= 0.0f) ? 1.0f : (1.0f - panningValue);
+    float rightGain = (panningValue >= 0.0f) ? 1.0f : (1.0f + panningValue);
+
     for(int i = 0; i < numFrames; i++) {
         float monoTarget = targetPlayer.getNextSample();
         float monoNoise = noisePlayer.getNextSample();
@@ -67,12 +71,15 @@ oboe::DataCallbackResult OboeEngine::onAudioReady(
 
         for(int ch = 0; ch < 2; ch++) {
             float mixedSample = 0.0f;
+            float gain = (ch == 0) ? leftGain : rightGain;
             
-            // 1. Testa tom puro (Lateralizado)
+            // 1. Testa tom puro (Lateralizado via Oscillador)
             mixedSample += testOscillator.getNextSample(ch);
             
-            // 2. Treino de Efeito Coquetel (Centrado)
-            mixedSample += monoTarget;
+            // 2. Canal de Estimulação Espacializada (Binaural Panning)
+            mixedSample += monoTarget * gain;
+            
+            // 3. Canais de Ruído (Centrados para Mascaramento)
             mixedSample += monoNoise;
             mixedSample += monoWhite;
 

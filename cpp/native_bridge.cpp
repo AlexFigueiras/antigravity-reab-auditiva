@@ -95,5 +95,11 @@ void set_noise_intensity(EngineContext* ctx, float intensity) {
 #endif
 }
 
+NATIVE_EXPORT
+void set_target_panning(EngineContext* ctx, float panning) {
+#ifdef __ANDROID__
+    if (ctx && ctx->engine) ctx->engine->setTargetPanning(panning);
+#endif
+}
 
 } // extern "C"

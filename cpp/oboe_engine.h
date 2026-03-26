@@ -20,6 +20,7 @@ private:
     NoiseGenerator whiteNoiseGenerator;
 
     float sampleRate = 48000.0f; 
+    std::atomic<float> targetPanning{0.0f}; // -1.0L, 0.0C, 1.0R
 
 public:
     OboeEngine();
@@ -39,6 +40,10 @@ public:
         targetPlayer.setData(data, len);
         targetPlayer.setVolume(vol);
         targetPlayer.setLoop(loop);
+    }
+
+    void setTargetPanning(float panning) {
+        targetPanning.store(panning);
     }
 
     void setNoiseSample(const float* data, int len, float vol, bool loop) {

@@ -1,13 +1,14 @@
 # Plano Diretor de Desenvolvimento (PRD) - App de Reabilitação Auditiva
 **Role Ativa:** [ORQUESTRADOR]
 
-## 1. Visão Geral do Produto
-Aplicativo mobile nativo focado em Reabilitação Auditiva Baseada em Plasticidade Neural, com ênfase no treinamento para perda de frequências agudas e dificuldade de processamento fonêmico ("efeito coquetel").
+## 1. Visão de Produto: Reabilitação Neural de Elite [MASTER_PLAN]
+Aplicativo mobile nativo focado em Reabilitação Auditiva Baseada em Plasticidade Neural, com estética **Industrial-Utilitária**. Foco em alta performance, latência zero e gamificação clínica sóbria (XP, Energia Neural e Streaks).
 
-## 2. Arquitetura de Roles & Integração MCP
-Toda a integração com os audiogramas dos usuários é regrada pela atuação conjunta de duas capabilities da plataforma Antigravity:
-*   **[ESPECIALISTA/DOMÍNIO]:** Atua como o "Audiologista Digital". Consome os dados do audiograma (Hz/dB por orelha) fornecidos via MCP para modular os parâmetros do motor de áudio. É responsável por mapear os limiares de audição (ex: perda em 4kHz, 8kHz) e aplicar filtros Equalizadores (EQ) paramétricos em tempo real antes da emissão do estímulo ao paciente.
-*   **[SEGURANÇA/INFRA]:** Valida, antes de qualquer execução de processamento via MCP, o escopo da identidade. Obrigatoriamente aplica RLS (Row Level Security) via tenantId e userId ao banco (Supabase) (`.eq('user_id', auth.uid())`). Garante a conformidade LGPD/GDPR no tráfego das Curvas Audiométricas e metadados sensíveis do paciente. Nenhuma query avança sem este isolamento (Zero-Trust Data Isolation).
+## 2. Caminho Crítico BOSYN (Golden Rules)
+1. Antes de qualquer código, validar o `docs/MASTER_PLAN.md`.
+2. Interface deve evocar autoridade clínica e cockpit industrial.
+3. Gerenciamento de memória de áudio (FFI) via `AudioServiceManager.forceStopAll()`.
+
 
 ## 3. Plano de Gamificação: Níveis de Processamento Auditivo
 Progressão terapêutica contínua guiando o cérebro do silêncio ao caos controlado:
@@ -40,19 +41,18 @@ De acordo com as diretrizes globais do projeto:
 
 ---
 **Status Atual:** 
-- [x] Ambiente Flutter configurado (PATH SDK).
-- [x] Modelo Clínico de Audiograma implementado (refinado JSON).
-- [x] Motor de Áudio (AudioRehabEngine) com síntese de Tom Puro (Nível 1) e Mixagem SNR (Nível 4).
-- [x] Dashboard Industrial Utilitarian com fl_chart.
-- [x] Tela de Calibração/Audiometria in-app funcional.
-- [x] Persistência: Supabase integrado (serviços e infraestrutura).
-- [x] Segurança [SEGURANÇA/INFRA]: Script SQL com RLS (Zero-Trust) gerado.
+- [x] Norte Estratégico estabelecido: `docs/MASTER_PLAN.md`.
+- [x] Camada de Persistência Atualizada (SQL user_profiles/rehab_progress).
+- [x] GamificationController (Energia/XP Phônemas) implementado.
+- [x] AudioServiceManager (Ciclo de Vida/forceStopAll) implementado.
+- [x] Ambiente Flutter configurado.
+- [x] Motor de Áudio Nativo robustecido.
 
 **Próximos Passos:** 
-1. **Configuração .env:** Preencher URL/Key do Supabase no arquivo `.env`.
-2. **Setup DB:** Executar `supabase_setup.sql` no painel do Supabase.
-3. **Nível 2 (Discriminação Fonêmica):** Colocar listas de palavras (wav/mp3) em `assets/audio/` e implementar UI de treino.
-4. **UX/UI:** Melhorar o feedback visual durante o teste de limiar (micro-animações de onda).
+1. **Refatoração UI:** Aplicar os novos Design Tokens Industriais na `HomeScreen`.
+2. **Fluxo de Energia:** Bloquear UI ao atingir 0 de Energia Neural no `GamificationController`.
+3. **Integração Supabase Profile:** Sincronizar dados de XP/Streak no login via `SupabaseService`.
+4. **Skill 5 Analytics:** Vincular acertos de fonemas agudos ao XP 2x e progressão de nível.
 
 
 5. Gestão Proativa de Skills

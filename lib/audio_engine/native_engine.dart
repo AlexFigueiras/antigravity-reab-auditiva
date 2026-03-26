@@ -86,6 +86,14 @@ class NativeDSPBridge implements ffi.Finalizable {
     func(_enginePtr, intensity);
   }
 
+  void setTargetPanning(double panning) {
+    final func = _lib.lookupFunction<
+        ffi.Void Function(ffi.Pointer<EngineContext>, ffi.Float),
+        void Function(ffi.Pointer<EngineContext>, double)
+    >('set_target_panning');
+    func(_enginePtr, panning);
+  }
+
   void dispose() {
     finalizer.detach(this);
     stopHardwareAudio();
