@@ -19,6 +19,14 @@ add_library(dsp_audio_engine SHARED
     dsp_engine.cpp
     oboe_engine.cpp
     fir_filter.cpp
+    pffft.c
+)
+
+# OTIMIZAÇÃO DE HARDWARE (ARM NEON & -O3) PARA PFFFT
+# Ativando flags de vetorização SIMD mandatórias
+target_compile_options(dsp_audio_engine PRIVATE 
+    -O3 
+    -mfpu=neon
 )
 
 # Pesquisa pela biblioteca de log do Android

@@ -17,14 +17,20 @@ private:
     PartitionedFIR highPassFir[2];
     TemporalEnvelopeExpander teeProcessor[2];
 
+    static constexpr int kMaxFramesPerCallback = 1024;
+    static constexpr int kDelayBufferSize = 512;
+    static constexpr int kFirGroupDelay = kDelayBufferSize / 2; // 256 amostras de atraso para FIR de 512 taps
+
     // Novo: Delay de compensação para alinhar IIR (Grave) com o FIR (Agudo)
-    // FIR de 512 taps = Atraso de 256 amostras.
-    float lowFreqDelayBuffer[2][512]; 
+    float lowFreqDelayBuffer[2][kDelayBufferSize]; 
     int delayWritePtr[2];
 
-    // Buffer da rota de Convolução
-    std::vector<float> highFreqBuffer[2];
+    // Buffers estáticos para alocação zero no hot path
+    float channelDataBuffer[2][kMaxFramesPerCallback];
+    float highFreqBuffer[2][kMaxFramesPerCallback];
 
+    // Modo Engenheiro: Diagnóstico de Saturação
+    std::atomic<bool> isSoftKneeHit{false};
 
 public:
     DspEngine(float sr = 48000.0f);
@@ -34,4 +40,12 @@ public:
     
     // Bloco Principal de Processamento do Callback de Áudio (C++ Core)
     void processAudioBlock(float* audioData, int numFrames, int numChannels);
+
+    bool consumeSoftKneeFlag() {
+        return isSoftKneeHit.exchange(false, std::memory_order_relaxed);
+    }
+    
+    void setSoftKneeFlag() {
+        isSoftKneeHit.store(true, std::memory_order_relaxed);
+    }
 };

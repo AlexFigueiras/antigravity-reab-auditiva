@@ -102,4 +102,57 @@ void set_target_panning(EngineContext* ctx, float panning) {
 #endif
 }
 
+NATIVE_EXPORT
+int64_t get_stimulus_timestamp_ns(EngineContext* ctx) {
+#ifdef __ANDROID__
+    if (ctx && ctx->engine) return ctx->engine->getStimulusTimestampNs();
+#endif
+    return 0;
+}
+
+NATIVE_EXPORT
+bool is_device_disconnected(EngineContext* ctx) {
+#ifdef __ANDROID__
+    if (ctx && ctx->engine) return ctx->engine->isDeviceDisconnected();
+#endif
+    return false;
+}
+
+NATIVE_EXPORT
+double get_latency_ms(EngineContext* ctx) {
+#ifdef __ANDROID__
+    if (ctx && ctx->engine) return ctx->engine->getLatencyMs();
+#endif
+    return 0.0;
+}
+
+NATIVE_EXPORT
+int32_t get_xrun_count(EngineContext* ctx) {
+#ifdef __ANDROID__
+    if (ctx && ctx->engine) return ctx->engine->getXRunCount();
+#endif
+    return 0;
+}
+
+NATIVE_EXPORT
+float get_dsp_load(EngineContext* ctx) {
+#ifdef __ANDROID__
+    if (ctx && ctx->engine) return ctx->engine->getDspLoad();
+#endif
+    return 0.0f;
+}
+
+NATIVE_EXPORT
+bool consume_soft_knee_flag(EngineContext* ctx) {
+#ifdef __ANDROID__
+    if (ctx && ctx->engine) return ctx->engine->getDspEngine().consumeSoftKneeFlag();
+#endif
+    return false;
+}
+
+NATIVE_EXPORT
+const char* get_clock_info() {
+    return "std::chrono::high_resolution_clock (nanoseconds)";
+}
+
 } // extern "C"

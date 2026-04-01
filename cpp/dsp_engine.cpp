@@ -1,10 +1,36 @@
 #include "dsp_engine.h"
+#include <cmath>
+#include <algorithm>
+#include <chrono>
+
+inline float processSoftKneeLimiter(float sample, DspEngine* engine) {
+    const float threshold = 0.707f; // -3 dBFS (Volume máximo linear de fala)
+    const float maxLimit = 0.98f;   // -0.17 dBFS (Trava Absoluta)
+    const float headroom = maxLimit - threshold;
+
+    float absSample = std::abs(sample);
+    if (absSample <= threshold) {
+        return sample; 
+    } 
+    
+    // Modo Engenheiro: Captura o pico de saturação para a UI
+    engine->setSoftKneeFlag();
+
+    // Região Saturada Asintótica
+    float overShoot = absSample - threshold;
+    float outSample = threshold + (overShoot / (1.0f + (overShoot / headroom)));
+    
+    return (sample > 0.0f) ? outSample : -outSample;
+}
 
 DspEngine::DspEngine(float sr) : sampleRate(sr) {
     for (int i = 0; i < 2; i++) {
-        highFreqBuffer[i].resize(2048, 0.0f);
+        for(int j=0; j<kMaxFramesPerCallback; j++) {
+            channelDataBuffer[i][j] = 0.0f;
+            highFreqBuffer[i][j] = 0.0f;
+        }
         delayWritePtr[i] = 0;
-        for(int j=0; j<512; j++) lowFreqDelayBuffer[i][j] = 0.0f;
+        for(int j=0; j<kDelayBufferSize; j++) lowFreqDelayBuffer[i][j] = 0.0f;
     }
     initializeParameters();
 }
@@ -21,7 +47,7 @@ void DspEngine::initializeParameters() {
         highPassFir[i].designHighPassKaiser(sampleRate, 1000.0f, 5.0f);
 
         // 3. TEE: Temporal Envelope Expansion
-        teeProcessor[i].initialize(sampleRate, 2.0f, 30.0f, 0.7f);
+        teeProcessor[i].initialize(sampleRate, 5.0f, 45.0f, 0.7f);
 
         // 4. Equalizador de Pico (Peaking EQ): Realça Transientes
         peakingEQ[i].configurePeakingEQ(sampleRate, 5500.0f, 4.32f, 4.0f);
@@ -32,30 +58,28 @@ void DspEngine::initializeParameters() {
 void DspEngine::processAudioBlock(float* audioData, int numFrames, int numChannels) {
     if (numChannels > 2) numChannels = 2; // Suporta apenas mono/stereo
 
-    // 1. Extrai canais para processamento FIR (que exige buffer contíguo)
-    std::vector<float> channelData[2];
+    if (numFrames > kMaxFramesPerCallback) numFrames = kMaxFramesPerCallback;
+
+    // 1. Extrai canais para processamento FIR (usando buffer pré-alocado)
     for (int ch = 0; ch < numChannels; ch++) {
-        channelData[ch].resize(numFrames);
-        if (highFreqBuffer[ch].size() < numFrames) highFreqBuffer[ch].resize(numFrames);
-        
         for (int i = 0; i < numFrames; i++) {
-            channelData[ch][i] = audioData[i * numChannels + ch];
+            channelDataBuffer[ch][i] = audioData[i * numChannels + ch];
         }
         
         // 2. Processa FIR High-Pass
-        highPassFir[ch].processBlockOverlapSave(channelData[ch].data(), highFreqBuffer[ch].data(), numFrames);
+        highPassFir[ch].processBlockOverlapSave(channelDataBuffer[ch], highFreqBuffer[ch], numFrames);
     }
 
     // 3. Loop de Processamento Final (Interleaved)
     for (int i = 0; i < numFrames; i++) {
         for (int ch = 0; ch < numChannels; ch++) {
-            float sample = channelData[ch][i];
+            float sample = channelDataBuffer[ch][i];
 
-            // A. Grave via IIR + Retardo para alinhar com o Agudo (Atraso FIR = 256)
+            // A. Grave via IIR + Retardo para alinhar com o Agudo
             float lowFreqRaw = lowPass1000Hz[ch].process(sample);
             
             // Pega amostra antiga (atrasada)
-            int readPtr = (delayWritePtr[ch] - 256 + 512) % 512;
+            int readPtr = (delayWritePtr[ch] - kFirGroupDelay + kDelayBufferSize) % kDelayBufferSize;
             float lowFreq = lowFreqDelayBuffer[ch][readPtr];
             
             // Salva amostra atual no buffer circular
@@ -71,10 +95,9 @@ void DspEngine::processAudioBlock(float* audioData, int numFrames, int numChanne
             // D. Peaking EQ
             highFreq = peakingEQ[ch].process(highFreq);
 
-            // E. Mix e Clipping Limiter Clínico
+            // E. Mix e Conditional Soft-Knee Limiter (Saturação Transparente)
             float outSample = lowFreq + highFreq;
-            if (outSample > 1.0f) outSample = 1.0f;
-            else if (outSample < -1.0f) outSample = -1.0f;
+            outSample = processSoftKneeLimiter(outSample, this);
 
             audioData[i * numChannels + ch] = outSample;
         }

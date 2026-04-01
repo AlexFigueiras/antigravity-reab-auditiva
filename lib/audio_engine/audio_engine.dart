@@ -28,6 +28,13 @@ class AudioRehabEngine {
     _tts = GoogleTTSService(apiKey);
   }
 
+  Future<void> restartHardwareAudio() async {
+    _nativeBridge.stopHardwareAudio();
+    await Future.delayed(const Duration(milliseconds: 200));
+    _nativeBridge.startHardwareAudio();
+    debugPrint("[ENGINE_REINIT] Hardware Audio Stream Restarted (EXCLUSIVE MODE ACTIVE)");
+  }
+
   Future<void> initializeEngine(Audiogram audiogram) async {
     _securePatientId = audiogram.patientId;
     _currentAudiogram = audiogram;
@@ -35,6 +42,12 @@ class AudioRehabEngine {
     _isInitialized = true;
     print("AudioRehabEngine Inicializado (Native Stereo DSP | Clinical EQ Active)");
   }
+
+  double getNativeLatencyMs() => _nativeBridge.getLatencyMs();
+  int getLastStimulusTimestampNs() => _nativeBridge.getStimulusTimestampNs();
+  int getNativeCurrentTimestampNs() => _nativeBridge.getCurrentTimestampNs();
+  
+  NativeDSPBridge get native => _nativeBridge; 
 
   /// Regra de Meio Ganho (Half-Gain) [AUDIOLOGIA]
   /// Gain = Loss / 2
@@ -69,9 +82,7 @@ class AudioRehabEngine {
     final bytes = await File(path).readAsBytes();
     Float32List samples = _convertInt16ToFloat32(bytes);
     
-    // 3. Aplica High-Shelf Filter via DSP Software (Dart) antes de carregar
-    // Para agudos, aplicamos o filtro shelf a partir da freqBand
-    samples = _applyHighShelf(samples, clinicalGainDb, freqBand);
+    // 3. (Removido: High-Shelf Filter em Dart. O processamento agora é 100% nativo)
     
     // 4. Carrega e executa no Native DSP
     _loadSampleToNative(samples, isTarget: true);
@@ -93,11 +104,9 @@ class AudioRehabEngine {
     // 2. Aplica EQ de Meio Ganho (Otimizado p/ agudos)
     double gainDb = getCompensatoryGain(freqBand);
     
-    // 3. Síntese e Processamento High-Shelf
     final path = await _tts.synthesize(text);
     final bytes = await File(path).readAsBytes();
     Float32List samples = _convertInt16ToFloat32(bytes);
-    samples = _applyHighShelf(samples, gainDb, freqBand);
     
     // 4. Carrega no Mixer
     _loadSampleToNative(samples, isTarget: true);
@@ -105,39 +114,7 @@ class AudioRehabEngine {
     print("ESTÍMULO ESPACIAL: '$text' | Pan: $panning | EQ: +$gainDb dB");
   }
 
-  /// Implementação de Filtro Biquad High-Shelf em Software
-  Float32List _applyHighShelf(Float32List input, double gainDb, double frequencyHz) {
-    if (gainDb <= 0) return input;
 
-    final double a = math.pow(10, gainDb / 40).toDouble();
-    final double w0 = 2 * math.pi * frequencyHz / _fs;
-    final double sinW0 = math.sin(w0);
-    final double cosW0 = math.cos(w0);
-    final double alpha = sinW0 / 2 * math.sqrt((a + 1 / a) * (1 / 0.707 - 1) + 2); // Q = 0.707
-
-    final double b0 = a * ((a + 1) + (a - 1) * cosW0 + 2 * math.sqrt(a) * alpha);
-    final double b1 = -2 * a * ((a - 1) + (a + 1) * cosW0);
-    final double b2 = a * ((a + 1) + (a - 1) * cosW0 - 2 * math.sqrt(a) * alpha);
-    final double a0 = (a + 1) - (a - 1) * cosW0 + 2 * math.sqrt(a) * alpha;
-    final double a1 = 2 * ((a - 1) - (a + 1) * cosW0);
-    final double a2 = (a + 1) - (a - 1) * cosW0 - 2 * math.sqrt(a) * alpha;
-
-    final output = Float32List(input.length);
-    double x1 = 0, x2 = 0, y1 = 0, y2 = 0;
-
-    for (int i = 0; i < input.length; i++) {
-      double x0 = input[i];
-      double y0 = (b0 / a0) * x0 + (b1 / a0) * x1 + (b2 / a0) * x2 - (a1 / a0) * y1 - (a2 / a0) * y2;
-      
-      output[i] = y0.clamp(-1.0, 1.0);
-      
-      x2 = x1;
-      x1 = x0;
-      y2 = y1;
-      y1 = y0;
-    }
-    return output;
-  }
 
   /// CALIBRAÇÃO: Tom senoidal puro para ajuste de hardware
   Future<void> playCalibrationTone({
@@ -177,11 +154,10 @@ class AudioRehabEngine {
     // 2. Aplica EQ Clínico no Alvo (Camada 1)
     double clinicalGainDb = getCompensatoryGain(freqBand);
     
-    // 3. Síntese e EQ
+    // 3. Síntese
     final path = await _tts.synthesize(text);
     final bytes = await File(path).readAsBytes();
     Float32List samples = _convertInt16ToFloat32(bytes);
-    samples = _applyHighShelf(samples, clinicalGainDb, freqBand);
 
     // 4. Carrega no motor nativo
     _loadSampleToNative(samples, isTarget: true);

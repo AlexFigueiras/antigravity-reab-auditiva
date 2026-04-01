@@ -1,5 +1,7 @@
 import 'dart:ffi' as ffi;
 import 'dart:io';
+import 'package:ffi/ffi.dart' as ffi;
+import 'package:flutter/foundation.dart';
 
 // Instanciação da Biblioteca Nativa Shared Object
 final ffi.DynamicLibrary _lib = Platform.isAndroid 
@@ -38,6 +40,21 @@ class NativeDSPBridge implements ffi.Finalizable {
 
   NativeDSPBridge() {
     _enginePtr = _createEngine();
+    
+    // LOG DE SEGURANÇA: Validação de Carregamento e Cronometria Nativa
+    try {
+      final getClock = _lib.lookupFunction<
+        ffi.Pointer<ffi.Int8> Function(),
+        ffi.Pointer<ffi.Int8> Function()
+      >('get_clock_info');
+      
+      final clockInfo = getClock().cast<ffi.Utf8>().toDartString();
+      debugPrint("Native Engine Loaded Successfully.");
+      debugPrint("Clock Precision: $clockInfo");
+    } catch (_) {
+      debugPrint("Native Load Warning: Diagnostic symbols missing.");
+    }
+
     // Prevenção de Leaks: quando este objeto Dart for coletado, destrói o engine C++.
     finalizer.attach(this, _enginePtr.cast(), detach: this);
   }
@@ -92,6 +109,69 @@ class NativeDSPBridge implements ffi.Finalizable {
         void Function(ffi.Pointer<EngineContext>, double)
     >('set_target_panning');
     func(_enginePtr, panning);
+  }
+
+  /// Recupera o momento exato que o estímulo sonou na Orelha (nanosegundos)
+  int getStimulusTimestampNs() {
+    final func = _lib.lookupFunction<
+        ffi.Int64 Function(ffi.Pointer<EngineContext>),
+        int Function(ffi.Pointer<EngineContext>)
+    >('get_stimulus_timestamp_ns');
+    return func(_enginePtr);
+  }
+
+  /// Verifica se o Hardware reportou desconexão de fone de ouvido
+  bool isDeviceDisconnected() {
+    final func = _lib.lookupFunction<
+        ffi.Bool Function(ffi.Pointer<EngineContext>),
+        bool Function(ffi.Pointer<EngineContext>)
+    >('is_device_disconnected');
+    return func(_enginePtr);
+  }
+
+  /// Retorna a latência atual do hardware em ms
+  double getLatencyMs() {
+    final func = _lib.lookupFunction<
+        ffi.Double Function(ffi.Pointer<EngineContext>),
+        double Function(ffi.Pointer<EngineContext>)
+    >('get_latency_ms');
+    return func(_enginePtr);
+  }
+
+  /// Retorna o contador de falhas de áudio (Underruns)
+  int getXRunCount() {
+    final func = _lib.lookupFunction<
+        ffi.Int32 Function(ffi.Pointer<EngineContext>),
+        int Function(ffi.Pointer<EngineContext>)
+    >('get_xrun_count');
+    return func(_enginePtr);
+  }
+
+  /// Retorna a carga de CPU dedicada do motor (0.0 a 1.0)
+  double getDspLoad() {
+    final func = _lib.lookupFunction<
+        ffi.Float Function(ffi.Pointer<EngineContext>),
+        double Function(ffi.Pointer<EngineContext>)
+    >('get_dsp_load');
+    return func(_enginePtr);
+  }
+
+  /// Consome o estado de compressão (SoftKnee) para diagnóstico visual
+  bool consumeSoftKneeFlag() {
+    final func = _lib.lookupFunction<
+        ffi.Bool Function(ffi.Pointer<EngineContext>),
+        bool Function(ffi.Pointer<EngineContext>)
+    >('consume_soft_knee_flag');
+    return func(_enginePtr);
+  }
+
+  /// Retorna o timestamp atual do hardware (nanosegundos)
+  int getCurrentTimestampNs() {
+    final func = _lib.lookupFunction<
+        ffi.Int64 Function(ffi.Pointer<EngineContext>),
+        int Function(ffi.Pointer<EngineContext>)
+    >('get_current_timestamp_ns');
+    return func(_enginePtr);
   }
 
   void dispose() {

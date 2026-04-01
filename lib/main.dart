@@ -9,6 +9,8 @@ import 'package:ear_training/services/supabase_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import 'package:ear_training/services/event_buffer.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -16,6 +18,11 @@ void main() async {
   try {
     await dotenv.load(fileName: ".env");
     await SupabaseService().initialize();
+    
+    // RIGOR CLÍNICO: Sincronização de Telemetria Offline e Escuta de Hardware
+    final buffer = SessionEventBuffer();
+    await buffer.init();
+    await buffer.syncOfflineTelemetry();
   } catch (e) {
     debugPrint("Erro na inicialização: $e");
   }

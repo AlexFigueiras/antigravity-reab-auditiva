@@ -62,6 +62,22 @@ class SupabaseService {
     });
   }
 
+  /// Batch upload para respostas granulares clinicamente marcadas [TELEMETRIA]
+  Future<void> saveStimulusResultsBatch(List<Map<String, dynamic>> payload) async {
+    if (payload.isEmpty) return;
+    
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) throw Exception("Usuário não autenticado.");
+
+    // Inject user_id em todos os itens garantindo compliance RLS
+    final authorizedPayload = payload.map((e) => {
+      ...e,
+      'user_id': user.id,
+    }).toList();
+
+    await Supabase.instance.client.from('stimulus_results').insert(authorizedPayload);
+  }
+
   /// Recupera o histórico de sessões de reabilitação [TELEMETRIA]
   Future<List<RehabSession>> getRehabHistory(String patientId) async {
     final List<dynamic> response = await Supabase.instance.client
@@ -70,6 +86,36 @@ class SupabaseService {
         .eq('patient_id', patientId)
         .order('date', ascending: true);
 
-    return response.map((data) => RehabSession.fromJson(data)).toList();
+  /// Recupera a evolução da latência média das últimas 5 sessões [SENIOR-FULLSTACK]
+  Future<List<Map<String, dynamic>>> getLatencyEvolution() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return [];
+
+    // Query otimizada: Agrega média de reaction_time da stimulus_results
+    // limitando às últimas 5 sessões para o gráfico de tendências.
+    final List<dynamic> response = await Supabase.instance.client
+        .from('stimulus_results')
+        .select('session_id, reaction_time_ms, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', ascending: false)
+        .limit(100); // Pegamos uma amostra grande para processar no app
+
+    if (response.isEmpty) return [];
+
+    // Agrupamento manual por session_id (Otimizado: preserva ordem temporal)
+    final Map<String, List<double>> sessionGroups = {};
+    for (var row in response) {
+      final id = row['session_id'] as String;
+      final rt = (row['reaction_time_ms'] as num).toDouble();
+      sessionGroups.putIfAbsent(id, () => []).add(rt);
+    }
+
+    final List<Map<String, dynamic>> results = [];
+    sessionGroups.forEach((id, times) {
+      final avg = times.reduce((a, b) => a + b) / times.length;
+      results.add({'session_id': id, 'avg_latency': avg});
+    });
+
+    return results.reversed.take(5).toList(); // Últimas 5 sessões em ordem cronológica
   }
 }

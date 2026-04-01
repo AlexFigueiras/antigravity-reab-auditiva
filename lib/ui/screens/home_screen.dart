@@ -1,16 +1,68 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../core/gamification_controller.dart';
 import '../../services/gatekeeper_service.dart';
+import '../../screens/widgets/technical_dashboard.dart';
 import 'training_dashboard.dart';
+import 'calibration_screen.dart';
 
 /// HOME SCREEN: Dashboard Central de Progressão [ORQUESTRADOR]
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  bool _hasPermissions = false;
+  bool _isPermanentlyDenied = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPermissions();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkPermissions(); // Re-checa se o usuário voltou das configurações
+    }
+  }
+
+  Future<void> _checkPermissions() async {
+    final mic = await Permission.microphone.status;
+    final bluetooth = await Permission.bluetoothConnect.status;
+
+    setState(() {
+      _hasPermissions = mic.isGranted && bluetooth.isGranted;
+      _isPermanentlyDenied = mic.isPermanentlyDenied || bluetooth.isPermanentlyDenied;
+    });
+  }
+
+  Future<void> _requestPermissions() async {
+    final results = await [
+      Permission.microphone,
+      Permission.bluetoothConnect,
+    ].request();
+
+    _checkPermissions();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (!_hasPermissions) return _buildPermissionGuard();
+
     final controller = context.watch<GamificationController>();
 
     return Scaffold(
@@ -21,7 +73,17 @@ class HomeScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildMainHeader(controller.acuityLevel),
+              GestureDetector(
+                onLongPress: () {
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => const TechnicalDashboard(),
+                  );
+                },
+                child: _buildMainHeader(controller.acuityLevel),
+              ),
               const SizedBox(height: 30),
               _buildProgressCard(controller.totalXP),
               const SizedBox(height: 30),
@@ -38,14 +100,64 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildPermissionGuard() {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0A0A),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(40.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.security, color: Color(0xFFE11D48), size: 64),
+              const SizedBox(height: 24),
+              const Text("ACESSO RESTRITO", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 4)),
+              const SizedBox(height: 16),
+              Text(
+                "A reabilitação neural exige acesso ao Microfone (para calibração) e ao Bluetooth (detecção de fones).",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12),
+              ),
+              const SizedBox(height: 40),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB), foregroundColor: Colors.white),
+                  onPressed: _isPermanentlyDenied ? openAppSettings : _requestPermissions,
+                  child: Text(_isPermanentlyDenied ? "ABRIR CONFIGURAÇÕES" : "AUTORIZAR ACESSO"),
+                ),
+              ),
+              if (_isPermanentlyDenied)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text("O acesso foi negado permanentemente. Por favor, habilite manualmente.", 
+                    textAlign: TextAlign.center, style: TextStyle(color: Colors.redAccent.withOpacity(0.7), fontSize: 10)),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMainHeader(String level) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text("BOSYN - REABILITAÇÃO NEURAL", style: TextStyle(color: Colors.white38, letterSpacing: 5, fontSize: 10)),
-        const SizedBox(height: 8),
-        Text("STATUS: $level", style: const TextStyle(color: Color(0xFF00FF41), fontSize: 28, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
-        Container(height: 2, width: 120, color: const Color(0xFF00FF41).withOpacity(0.5)),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("BOSYN - REABILITAÇÃO NEURAL", style: TextStyle(color: Colors.white38, letterSpacing: 5, fontSize: 10)),
+            const SizedBox(height: 8),
+            Text("STATUS: $level", style: const TextStyle(color: Color(0xFF00FF41), fontSize: 28, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
+            Container(height: 2, width: 120, color: const Color(0xFF00FF41).withOpacity(0.5)),
+          ],
+        ),
+        IconButton(
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CalibrationScreen())),
+          icon: const Icon(Icons.tune, color: Colors.white24),
+          tooltip: "Calibrar Latência",
+        ),
       ],
     );
   }
