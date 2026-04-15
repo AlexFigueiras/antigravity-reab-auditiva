@@ -7,7 +7,7 @@
 #include <chrono>
 #include "dsp_engine.h"
 
-class OboeEngine : public oboe::StabilizedCallback {
+class OboeEngine : public oboe::AudioStreamCallback {
 private:
     std::shared_ptr<oboe::AudioStream> outputStream;
     std::shared_ptr<oboe::AudioStream> inputStream;
@@ -99,7 +99,7 @@ public:
     double getLatencyMs() {
         if (outputStream) {
             auto result = outputStream->calculateLatencyMillis();
-            return result.isOk() ? result.value() : 0.0;
+            return (bool)result ? result.value() : 0.0;
         }
         return 0.0;
     }
@@ -107,7 +107,7 @@ public:
     int32_t getXRunCount() {
         if (outputStream) {
             auto result = outputStream->getXRunCount();
-            return result.isOk() ? result.value() : 0;
+            return (bool)result ? result.value() : 0;
         }
         return 0;
     }

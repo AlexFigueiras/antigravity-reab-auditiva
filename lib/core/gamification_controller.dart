@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
+import 'phoneme_map.dart';
 
 /// Controlador Central de Gamificação Clínica [ORQUESTRADOR]
 /// Gerencia XP, Energia Neural e Nível de Acuidade de forma reativa.

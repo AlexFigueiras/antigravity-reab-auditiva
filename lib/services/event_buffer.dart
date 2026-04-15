@@ -67,7 +67,7 @@ class SessionEventBuffer {
     final session = await AudioSession.instance;
     await _updateHardwareInfo();
     
-    _audioSessionSub = session.devicesChangedStream.listen((_) async {
+    _audioSessionSub = session.becomingNoisyEventStream.listen((_) async {
       final oldHardware = _currentHardware;
       await _updateHardwareInfo();
       

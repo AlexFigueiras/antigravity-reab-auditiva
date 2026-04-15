@@ -24,10 +24,11 @@ add_library(dsp_audio_engine SHARED
 
 # OTIMIZAÇÃO DE HARDWARE (ARM NEON & -O3) PARA PFFFT
 # Ativando flags de vetorização SIMD mandatórias
-target_compile_options(dsp_audio_engine PRIVATE 
-    -O3 
-    -mfpu=neon
-)
+if(${ANDROID_ABI} STREQUAL "armeabi-v7a")
+    target_compile_options(dsp_audio_engine PRIVATE -O3 -mfpu=neon)
+else()
+    target_compile_options(dsp_audio_engine PRIVATE -O3)
+endif()
 
 # Pesquisa pela biblioteca de log do Android
 find_library(log-lib log)

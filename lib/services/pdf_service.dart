@@ -70,8 +70,8 @@ class PdfService {
                 height: 150,
                 child: pw.Chart(
                   grid: pw.CartesianGrid(
-                    xAxis: pw.FixedAxis([0, 1, 2, 3, 4, 5, 6], buildLabel: (v) => "D${v.toInt()+1}"),
-                    yAxis: pw.FixedAxis([0, 25, 50, 75, 100], buildLabel: (v) => "${v.toInt()}%"),
+                    xAxis: pw.FixedAxis([0, 1, 2, 3, 4, 5, 6], buildLabel: (v) => pw.Text("D${v.toInt()+1}")),
+                    yAxis: pw.FixedAxis([0, 25, 50, 75, 100], buildLabel: (v) => pw.Text("${v.toInt()}%")),
                   ),
                   datasets: chartData,
                 ),

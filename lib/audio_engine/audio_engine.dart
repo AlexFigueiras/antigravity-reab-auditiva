@@ -6,6 +6,7 @@ import 'package:ffi/ffi.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/audiogram.dart';
 import '../services/tts_service.dart';
+import 'package:flutter/foundation.dart';
 import 'native_engine.dart';
 
 /// Motor de Áudio Central para Reabilitação Auditiva
@@ -167,8 +168,6 @@ class AudioRehabEngine {
 
   /// NÍVEL 4: O Efeito Coquetel - SNR Balanceado
   @Deprecated("Use playCocktailStimulus para maior controle clínico")
-  Future<void> playSpeechInNoise({
-
   void _loadSampleToNative(Float32List samples, {bool isTarget = true}) {
     final pointer = calloc<ffi.Float>(samples.length);
     for (int i = 0; i < samples.length; i++) {
@@ -198,6 +197,50 @@ class AudioRehabEngine {
 
   void stop() {
     _nativeBridge.stopHardwareAudio();
+  }
+
+  /// NÍVEL 4: O Efeito Coquetel - SNR Balanceado (Alias legado)
+  Future<void> playSpeechInNoise({
+    required String targetText,
+    required double snrDb,
+  }) async {
+    return playCocktailStimulus(
+      text: targetText,
+      snrDb: snrDb,
+      noiseEnvironment: 'RESTAURANTE',
+    );
+  }
+
+  /// CALIBRAÇÃO: Tom senoidal puro para ajuste de hardware (Alias para ThresholdTest)
+  Future<void> playPureTone({
+    required int frequencyHz,
+    required int durationMs,
+    required EarSide ear,
+    required double dbLevel,
+  }) async {
+    _verifySecurityScope();
+
+    // 1. Gera Senoide
+    final int numSamples = (durationMs / 1000.0 * _fs).toInt();
+    final Float32List samples = Float32List(numSamples);
+    
+    // Nível Linear: 10^((dB HL - Ref) / 20)
+    double amplitude = math.pow(10, (dbLevel - _kRefDb) / 20).toDouble();
+
+    for (int i = 0; i < numSamples; i++) {
+      samples[i] = amplitude * math.sin(2 * math.pi * frequencyHz * i / _fs);
+    }
+
+    // 2. Configura Panning (L/R)
+    double targetPanning = 0.0;
+    if (ear == EarSide.left) targetPanning = -1.0;
+    if (ear == EarSide.right) targetPanning = 1.0;
+    _nativeBridge.setTargetPanning(targetPanning);
+
+    // 3. Carrega no motor nativo
+    _loadSampleToNative(samples, isTarget: true);
+    
+    print("PURE TONE: $frequencyHz Hz | $dbLevel dB | Ear: $ear");
   }
 
   void _verifySecurityScope() {

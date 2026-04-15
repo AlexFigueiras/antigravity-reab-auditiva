@@ -199,24 +199,7 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
     _radarController.forward(from: 0); // Efeito visual de PING no sonar
   }
 
-  void _handleN2Choice(String choice) {
-    if (_currentStimulus == null) return;
-    final controller = context.read<GamificationController>();
-    bool isCorrect = choice == _currentStimulus!['target'];
 
-    if (isCorrect) {
-      setState(() {
-        _isCorrectPulse = true;
-        controller.addAcuityXP(1.0, [_currentStimulus!['target'][0].toLowerCase()]);
-        _radarController.forward(from: 0).then((_) => _isCorrectPulse = false);
-      });
-      Future.delayed(const Duration(seconds: 2), _startLevel2);
-    } else {
-      controller.consumeEnergy();
-      setState(() => _extraBoost += 3.0);
-      _playLevel2Stimulus();
-    }
-  }
 
   void _handleN3Choice(double pannedAngle) {
     final spatialController = context.read<SpatialController>();
@@ -349,7 +332,7 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
             value: (snr + 10) / 30, // Normalizado
             backgroundColor: Colors.white12,
             valueColor: AlwaysStoppedAnimation(isCritical ? const Color(0xFFE11D48) : const Color(0xFF00FF41)),
-            height: 2,
+            minHeight: 2.0,
           ),
         ],
       ),

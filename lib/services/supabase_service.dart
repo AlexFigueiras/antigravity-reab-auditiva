@@ -86,6 +86,9 @@ class SupabaseService {
         .eq('patient_id', patientId)
         .order('date', ascending: true);
 
+    return response.map((data) => RehabSession.fromJson(data)).toList();
+  }
+
   /// Recupera a evolução da latência média das últimas 5 sessões [SENIOR-FULLSTACK]
   Future<List<Map<String, dynamic>>> getLatencyEvolution() async {
     final user = Supabase.instance.client.auth.currentUser;

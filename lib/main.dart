@@ -73,5 +73,4 @@ class EarTrainingApp extends StatelessWidget {
       home: home,
     );
   }
-  }
 }

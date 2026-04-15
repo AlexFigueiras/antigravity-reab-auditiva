@@ -20,11 +20,13 @@ PartitionedFIR::PartitionedFIR(int taps, int block) : filterLength(taps), blockS
     freqDomainIR = (float*)pffft_aligned_malloc(fftSize * 2 * sizeof(float));
     timeDomainBuffer = (float*)pffft_aligned_malloc(fftSize * 2 * sizeof(float));
     freqDomainBuffer = (float*)pffft_aligned_malloc(fftSize * 2 * sizeof(float));
+    workSpace = (float*)pffft_aligned_malloc(fftSize * 2 * sizeof(float));
     
     for(int i=0; i<fftSize*2; i++) {
         freqDomainIR[i] = 0.0f;
         timeDomainBuffer[i] = 0.0f;
         freqDomainBuffer[i] = 0.0f;
+        workSpace[i] = 0.0f;
     }
 }
 
@@ -32,6 +34,7 @@ PartitionedFIR::~PartitionedFIR() {
     pffft_aligned_free(freqDomainIR);
     pffft_aligned_free(timeDomainBuffer);
     pffft_aligned_free(freqDomainBuffer);
+    pffft_aligned_free(workSpace);
     if(fftSetup) pffft_destroy_setup(fftSetup);
 }
 
@@ -75,7 +78,6 @@ void PartitionedFIR::designHighPassKaiser(float sampleRate, float cutoffFreq, fl
     for(int i=0; i<fftSize; i++) {
         timeDomainBuffer[i] = (i < filterLength) ? impulseResponse[i] : 0.0f;
     }
-    alignas(16) float workSpace[fftSize * 2];
     pffft_transform_ordered(fftSetup, timeDomainBuffer, freqDomainIR, workSpace, PFFFT_REAL);
 }
 
@@ -100,7 +102,6 @@ void PartitionedFIR::processBlockOverlapSave(float* inputData, float* outputData
         }
         
         // 2. FFT
-        alignas(16) float workSpace[fftSize * 2];
         pffft_transform_ordered(fftSetup, timeDomainBuffer, freqDomainBuffer, workSpace, PFFFT_REAL);
         
         // 3. Multiplicação complexa: Y = X * H

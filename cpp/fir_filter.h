@@ -15,6 +15,7 @@ private:
     float* freqDomainIR; // H[k]
     float* timeDomainBuffer;
     float* freqDomainBuffer;
+    float* workSpace;
 
     float besselI0(float x);
 

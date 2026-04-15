@@ -100,7 +100,7 @@ class LinearTrendPainter extends CustomPainter {
     const maxVal = 1000.0;
     
     for (int i = 0; i < data.length; i++) {
-      final y = size.height - (data[i]['avg_latency'] as double / maxVal * size.height);
+      final y = size.height - ((data[i]['avg_latency'] as num).toDouble() / maxVal * size.height);
       final x = i * stepX;
       
       final String hwType = data[i]['output_hardware'] ?? 'unknown';

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import '../../services/event_buffer.dart';
@@ -47,7 +49,7 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
 
   Future<void> _loadPendingFiles() async {
     final dir = await getApplicationDocumentsDirectory();
-    final files = dir.listSync().whereType<File>().where((f) => f.path.contains("pending_telemetry_")).toList();
+    final files = dir.listSync().where((f) => f is File && f.path.contains("pending_telemetry_")).cast<File>().toList();
     setState(() {
       _pendingFiles = files.map((f) => f.path.split('/').last).toList();
     });

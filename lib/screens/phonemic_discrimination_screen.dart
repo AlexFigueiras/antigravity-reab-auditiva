@@ -56,6 +56,7 @@ class _PhonemicDiscriminationScreenState extends State<PhonemicDiscriminationScr
     // Na verdade, na discriminação clássica, tocamos o ALVO.
     await _engine.playPhonemicStimulus(
       text: _currentPair!.target,
+      freqBand: 4000.0,
     );
     setState(() => _canRespond = true);
   }
