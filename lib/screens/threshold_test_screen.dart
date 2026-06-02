@@ -79,11 +79,18 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
       }
     } else {
       if (!_heardOnce) {
-        // Se não ouviu o volume inicial de 40dB, tem perda nesta frequência. Vai aumentando.
-        setState(() {
-          _currentDb += 5.0;
-        });
-        _playCurrentTestTone();
+        // Se não ouviu o volume inicial de 40dB, tem perda nesta frequência.
+        // Vai aumentando até o limite audiométrico de 120 dB HL. Ao atingir
+        // o teto sem resposta, registra "sem resposta" (120) e segue adiante,
+        // evitando loop infinito em perdas profundas / setup incorreto.
+        if (_currentDb >= 120.0) {
+          _recordThresholdAndNext(120.0);
+        } else {
+          setState(() {
+            _currentDb = (_currentDb + 5.0).clamp(0.0, 120.0);
+          });
+          _playCurrentTestTone();
+        }
       } else {
         // Parou de ouvir após ir baixando o volume. Pega o valor audível anterior.
         _recordThresholdAndNext(_lastHeardDb);

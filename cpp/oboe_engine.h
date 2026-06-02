@@ -29,6 +29,9 @@ private:
     // Resiliência: Flag de desconexão de fone
     std::atomic<bool> deviceDisconnected{false};
     
+    // Resultado do teste FTZ/DAZ (gravado na thread de audio, lido fora dela)
+    std::atomic<bool> ftzActive{false};
+
     // Telemetria Alpha 2 (Modo Engenheiro)
     std::atomic<float> dspUsage{0.0f};
     int32_t lastXRunCount = 0;

@@ -51,10 +51,15 @@ class EarTrainingApp extends StatelessWidget {
           .from('profiles')
           .select('onboarding_completed')
           .eq('user_id', session.user.id)
-          .single(),
+          .maybeSingle(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return _buildMaterialApp(const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFF00FF41)))));
+        }
+        if (snapshot.hasError) {
+          debugPrint("Erro ao carregar perfil: ${snapshot.error}");
+          // Falha de rede/perfil ausente: trata como onboarding pendente.
+          return _buildMaterialApp(const OnboardingScreen());
         }
         final isCompleted = snapshot.data?['onboarding_completed'] ?? false;
         return _buildMaterialApp(isCompleted ? const HomeScreen() : const OnboardingScreen());

@@ -51,7 +51,10 @@ class RehabSession {
     id: json['id'],
     patientId: json['patient_id'],
     date: DateTime.parse(json['date'] ?? json['created_at']),
-    level: RehabLevel.values.firstWhere((e) => e.value == json['level']),
+    level: RehabLevel.values.firstWhere(
+      (e) => e.value == json['level'],
+      orElse: () => RehabLevel.toneIsolation,
+    ),
     totalTrials: json['total_trials'],
     correctAnswers: json['correct_answers'],
     averageResponseTimeMs: (json['avg_response_time_ms'] as num).toDouble(),

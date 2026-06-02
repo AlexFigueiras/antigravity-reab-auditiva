@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// GATEKEEPER SERVICE: Gestor de Acesso e Monetização [GATEKEEPER]
@@ -15,28 +16,46 @@ class GatekeeperService {
     if (user == null) return false;
 
     // Consulta Status de Assinatura no Perfil
-    final res = await Supabase.instance.client
-        .from('profiles')
-        .select('subscription_status')
-        .eq('user_id', user.id)
-        .single();
+    try {
+      final res = await Supabase.instance.client
+          .from('profiles')
+          .select('subscription_status')
+          .eq('user_id', user.id)
+          .maybeSingle();
 
-    final status = res['subscription_status'] as String? ?? 'free';
-    
-    // Níveis 3 e 4 exigem status 'pro' ou 'elite'
-    return status != 'free';
+      final status = res?['subscription_status'] as String? ?? 'free';
+
+      // Níveis 3 e 4 exigem status 'pro' ou 'elite'
+      return status != 'free';
+    } catch (e) {
+      debugPrint("Erro ao verificar acesso: $e");
+      // Em caso de falha, negamos acesso ao conteúdo pago (fail-closed).
+      return false;
+    }
   }
 
-  /// Atualiza o status de assinatura após pagamento bem-sucedido [MONETIZAÇÃO]
-  Future<void> upgradeToPro() async {
+  /// Recarrega o status de assinatura a partir do backend.
+  ///
+  /// IMPORTANTE: a promoção para 'pro' NÃO é feita pelo cliente. O cliente
+  /// não tem permissão para alterar `subscription_status` (protegido por
+  /// trigger no Postgres — ver supabase_migration_003.sql). O upgrade real
+  /// deve ocorrer no backend, via webhook do provedor de pagamento (Stripe),
+  /// que usa a service_role para escrever 'pro' no perfil. Após o pagamento,
+  /// o cliente apenas re-consulta o status atualizado.
+  Future<bool> refreshSubscriptionStatus() async {
     final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
+    if (user == null) return false;
 
-    await Supabase.instance.client
-        .from('profiles')
-        .update({'subscription_status': 'pro'})
-        .eq('user_id', user.id);
-    
-    print("UPGRADE REALIZADO: Status Pro Ativo para ${user.id}");
+    try {
+      final res = await Supabase.instance.client
+          .from('profiles')
+          .select('subscription_status')
+          .eq('user_id', user.id)
+          .maybeSingle();
+      return (res?['subscription_status'] as String? ?? 'free') != 'free';
+    } catch (e) {
+      debugPrint("Erro ao recarregar assinatura: $e");
+      return false;
+    }
   }
 }

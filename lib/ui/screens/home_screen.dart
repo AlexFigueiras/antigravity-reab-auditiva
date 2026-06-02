@@ -287,13 +287,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB), foregroundColor: Colors.white, shape: const BeveledRectangleBorder()),
                   onPressed: () async {
-                    // MOCK STRIPE CHECKOUT
-                    debugPrint("Iniciando Stripe Checkout...");
-                    await Future.delayed(const Duration(seconds: 2));
-                    await GatekeeperService().upgradeToPro();
+                    // TODO(pagamento): integrar o fluxo real do flutter_stripe.
+                    // O cliente NÃO promove a assinatura — quem grava 'pro' é o
+                    // webhook do Stripe no backend (service_role). Aqui apenas:
+                    //   1) abrir o PaymentSheet do Stripe;
+                    //   2) após confirmação, chamar refreshSubscriptionStatus().
+                    // Enquanto a integração não existe, NÃO concedemos acesso.
+                    debugPrint("Checkout Stripe ainda não integrado.");
                     if (context.mounted) {
                       Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("ACESSO ELITE ATIVADO!")));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Pagamento indisponível: integração Stripe pendente.")),
+                      );
                     }
                   },
                   child: const Text("ATIVAR ACESSO ELITE", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2)),

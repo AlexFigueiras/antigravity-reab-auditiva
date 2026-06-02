@@ -8,7 +8,10 @@
 
 PartitionedFIR::PartitionedFIR(int taps, int block) : filterLength(taps), blockSize(block) {
     impulseResponse.resize(taps, 0.0f);
-    overlapBuffer.resize(blockSize, 0.0f); // M
+    // Overlap-Save guarda os (L-1) ultimos samples de entrada, nao M.
+    // Dimensionar como blockSize (256 < 511) causava escrita/leitura fora dos
+    // limites (corrupcao de heap) nas linhas que indexam ate filterLength-1.
+    overlapBuffer.resize(filterLength - 1, 0.0f);
     
     // Calcula potencia de 2 para FFT: >= L + M - 1
     int target = taps + block - 1;

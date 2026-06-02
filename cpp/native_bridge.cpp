@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <cstdlib>
+#include <chrono>
 
 #ifdef __ANDROID__
 #include "oboe_engine.h"
@@ -108,6 +109,16 @@ int64_t get_stimulus_timestamp_ns(EngineContext* ctx) {
     if (ctx && ctx->engine) return ctx->engine->getStimulusTimestampNs();
 #endif
     return 0;
+}
+
+// Relógio "agora" na MESMA base do get_stimulus_timestamp_ns (steady_clock),
+// para que (agora - estímulo) produza um delta de reação válido no Dart.
+NATIVE_EXPORT
+int64_t get_current_timestamp_ns(EngineContext* ctx) {
+    (void)ctx;
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()
+    ).count();
 }
 
 NATIVE_EXPORT

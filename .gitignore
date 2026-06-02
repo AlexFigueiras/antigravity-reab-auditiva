@@ -45,4 +45,18 @@ app.*.map.json
 /android/app/release
 
 local.properties
+**/local.properties
+
+# Secrets / environment
+.env
+.env.*
+!.env.example
+
+# Build/debug detritus
+analysis.txt
+build_log.txt
+debug_env.log
+write_test.txt
+*.bat
+*.ps1
 
