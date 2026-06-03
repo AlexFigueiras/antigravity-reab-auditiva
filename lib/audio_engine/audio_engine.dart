@@ -35,7 +35,6 @@ class AudioRehabEngine {
   }
 
   Future<void> initializeEngine(Audiogram audiogram) async {
-    _securePatientId = audiogram.patientId;
     _currentAudiogram = audiogram;
     _nativeBridge.startHardwareAudio();
     _isInitialized = true;
