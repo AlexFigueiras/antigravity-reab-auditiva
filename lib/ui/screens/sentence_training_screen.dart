@@ -1,43 +1,49 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import '../audio_engine/audio_engine.dart';
-import '../models/audiogram.dart';
-import '../models/rehab_session.dart';
-import '../models/phonemic_pair.dart'; // Reutilizar pares para identificação rápida
-import '../services/supabase_service.dart';
+import '../../core/sentence_bank.dart';
+import '../../models/audiogram.dart';
+import '../../models/rehab_session.dart';
+import '../../services/audio_service_manager.dart';
+import '../../services/supabase_service.dart';
 
-class SpeechInNoiseScreen extends StatefulWidget {
+/// MÓDULO DE FRASES (Fase 3): compreensão de frases do dia a dia em ruído.
+/// Staircase adaptativo de SNR (±2dB) com ~10 tentativas e cálculo de SRT.
+class SentenceTrainingScreen extends StatefulWidget {
   final Audiogram audiogram;
-  const SpeechInNoiseScreen({super.key, required this.audiogram});
+  const SentenceTrainingScreen({super.key, required this.audiogram});
 
   @override
-  State<SpeechInNoiseScreen> createState() => _SpeechInNoiseScreenState();
+  State<SentenceTrainingScreen> createState() => _SentenceTrainingScreenState();
 }
 
-class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
-  final AudioRehabEngine _engine = AudioRehabEngine();
+class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
   final SupabaseService _supabase = SupabaseService();
-  
-  double _currentSnr = 15.0; // Inicia facilitado (+15dB)
+
+  double _currentSnr = 15.0;
   int _currentTrial = 0;
-  final int _maxTrials = 12;
+  final int _maxTrials = 10;
   int _correctAnswers = 0;
-  DateTime _sessionStart = DateTime.now();
-  
-  PhonemicPair? _currentPair;
+  final DateTime _sessionStart = DateTime.now();
+
+  Map<String, dynamic>? _currentSentence;
   List<String> _options = [];
   bool _canRespond = false;
-  
-  final List<Map<String, dynamic>> _sessionLog = [];
 
-  // Rastreio de reversões para cálculo do SRT (limiar de reconhecimento de fala).
+  final List<Map<String, dynamic>> _sessionLog = [];
   final List<double> _reversals = [];
-  bool? _lastCorrect; // Direção da última resposta para detectar reversão.
+  bool? _lastCorrect;
 
   @override
   void initState() {
     super.initState();
+    AudioServiceManager().initializeEngineForUser(widget.audiogram);
     _startTrial();
+  }
+
+  @override
+  void dispose() {
+    AudioServiceManager().forceStopAll();
+    super.dispose();
   }
 
   void _startTrial() {
@@ -45,31 +51,31 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
       _finishSession();
       return;
     }
-
     final random = Random();
-    _currentPair = phonemicPairs[random.nextInt(phonemicPairs.length)];
-    _options = [_currentPair!.target, _currentPair!.distractor]..shuffle();
-    
+    _currentSentence = SENTENCE_BANK[random.nextInt(SENTENCE_BANK.length)];
+    _options = [
+      _currentSentence!['target'] as String,
+      _currentSentence!['distractor'] as String,
+    ]..shuffle();
+
     setState(() => _canRespond = false);
     _playStimulus();
   }
 
   void _playStimulus() async {
-    // NÍVEL 4: Mixagem dinâmica de Sinal + Ruído Sintético
-    await _engine.playSpeechInNoise(
-      targetText: _currentPair!.target,
-      snrDb: _currentSnr,
-    );
-    
-    setState(() => _canRespond = true);
+    await AudioServiceManager().engine.playCocktailStimulus(
+          text: _currentSentence!['target'] as String,
+          snrDb: _currentSnr,
+          noiseEnvironment: 'RESTAURANTE',
+        );
+    if (mounted) setState(() => _canRespond = true);
   }
 
   void _handleResponse(String selected) {
     if (!_canRespond) return;
+    final target = _currentSentence!['target'] as String;
+    final isCorrect = selected == target;
 
-    final isCorrect = selected == _currentPair!.target;
-
-    // Detecta reversão: mudança de direção entre acerto e erro.
     if (_lastCorrect != null && _lastCorrect != isCorrect) {
       _reversals.add(_currentSnr);
     }
@@ -77,16 +83,14 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
 
     if (isCorrect) {
       _correctAnswers++;
-      // Lógica de Plasticidade: Se acertou, dificulta o SNR (-2dB)
       _currentSnr -= 2.0;
     } else {
-      // Se errou, facilita o SNR (+2dB) para manter motivação e aprendizado
       _currentSnr += 2.0;
     }
 
     _sessionLog.add({
       'trial': _currentTrial + 1,
-      'pair': _currentPair!.target,
+      'pair': target,
       'snr': _currentSnr,
       'correct': isCorrect,
     });
@@ -95,8 +99,7 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
     _startTrial();
   }
 
-  /// Calcula o SRT (limiar de reconhecimento de fala) como a média do SNR
-  /// nos pontos de reversão, ignorando a primeira reversão quando há ≥2.
+  /// SRT = média do SNR nas reversões, ignorando a primeira quando há ≥2.
   double _calculateSRT() {
     if (_reversals.length < 2) {
       return _reversals.isNotEmpty ? _reversals.last : _currentSnr;
@@ -120,6 +123,7 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
         'log': _sessionLog,
         'final_snr': _currentSnr,
         'srt': srt,
+        'module': 'sentences',
       },
     );
 
@@ -131,6 +135,7 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text("Erro: $e")));
+        Navigator.pop(context);
       }
     }
   }
@@ -142,16 +147,16 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
         backgroundColor: const Color(0xFF1A1A1A),
         title: const Text("Muito bem!", style: TextStyle(color: Colors.white)),
         content: Text(
-          "Você entendeu as palavras com até ${srt.toStringAsFixed(0)} dB de "
+          "Você entendeu as frases com até ${srt.toStringAsFixed(0)} dB de "
           "barulho de fundo. Quanto menor esse número, melhor você ouve no "
           "meio do barulho. Continue treinando!",
-          style: const TextStyle(color: Colors.white70, fontSize: 16),
+          style: const TextStyle(color: Colors.white70, fontSize: 18),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text("Entendi",
-                style: TextStyle(color: Color(0xFF00FF41), fontSize: 16)),
+                style: TextStyle(color: Color(0xFF00FF41), fontSize: 18)),
           ),
         ],
       ),
@@ -163,14 +168,13 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D0F),
       appBar: AppBar(
-        title: const Text("Entender no barulho"),
+        title: const Text("Frases do dia a dia"),
         backgroundColor: Colors.transparent,
       ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           children: [
-            // Indicador de Dificuldade SNR
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -180,35 +184,49 @@ class _SpeechInNoiseScreenState extends State<SpeechInNoiseScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text("Barulho de fundo", style: TextStyle(fontSize: 12, color: Colors.grey)),
-                  Text("${_currentSnr.toInt()} dB", style: TextStyle(color: _currentSnr < 5 ? Colors.orange : Colors.greenAccent, fontWeight: FontWeight.bold)),
+                  const Text("Barulho de fundo",
+                      style: TextStyle(fontSize: 14, color: Colors.grey)),
+                  Text("${_currentSnr.toInt()} dB",
+                      style: TextStyle(
+                          color: _currentSnr < 5
+                              ? Colors.orange
+                              : Colors.greenAccent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16)),
                 ],
               ),
             ),
             const Spacer(),
-            const Icon(Icons.forum, size: 80, color: Colors.blueAccent),
+            const Icon(Icons.record_voice_over,
+                size: 80, color: Colors.blueAccent),
             const SizedBox(height: 32),
-            const Text("Entenda a palavra", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+            const Text("Qual frase você ouviu?",
+                style:
+                    TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            const Text("Identifique a palavra no meio do som ambiente", style: TextStyle(color: Colors.grey)),
+            const Text("Toque na frase que você entendeu",
+                style: TextStyle(color: Colors.grey, fontSize: 16)),
             const Spacer(),
-            Row(
-              children: _options.map((opt) => Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1E1E24),
-                      minimumSize: const Size(0, 100),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ..._options.map((opt) => Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1E1E24),
+                        minimumSize: const Size(0, 80),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                      ),
+                      onPressed: _canRespond ? () => _handleResponse(opt) : null,
+                      child: Text(opt,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              fontSize: 22, fontWeight: FontWeight.bold)),
                     ),
-                    onPressed: () => _handleResponse(opt),
-                    child: Text(opt, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                   ),
-                ),
-              )).toList(),
-            ),
-            const SizedBox(height: 48),
+                )),
+            const SizedBox(height: 24),
           ],
         ),
       ),

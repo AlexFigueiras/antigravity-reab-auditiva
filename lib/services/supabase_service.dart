@@ -157,4 +157,50 @@ class SupabaseService {
       return [];
     }
   }
+
+  /// Retorna todas as sessões de reabilitação do usuário logado (por user_id).
+  Future<List<RehabSession>> getAllSessions() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return [];
+    try {
+      final List<dynamic> response = await Supabase.instance.client
+          .from('rehab_sessions')
+          .select()
+          .eq('user_id', user.id)
+          .order('date', ascending: true);
+      return response.map((data) => RehabSession.fromJson(data)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Retorna a data da autopercepção mais recente do usuário, ou null.
+  Future<DateTime?> getLastSelfPerceptionDate() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return null;
+    try {
+      final res = await Supabase.instance.client
+          .from('self_perception')
+          .select('created_at')
+          .eq('user_id', user.id)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (res == null || res['created_at'] == null) return null;
+      return DateTime.parse(res['created_at'] as String);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Salva a autopercepção semanal (escala 1-5) do usuário.
+  Future<void> saveSelfPerception(int score) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) throw Exception("Usuário não autenticado.");
+
+    await Supabase.instance.client.from('self_perception').insert({
+      'user_id': user.id,
+      'score': score,
+    });
+  }
 }

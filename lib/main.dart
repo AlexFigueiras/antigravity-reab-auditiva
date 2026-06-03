@@ -74,6 +74,16 @@ class EarTrainingApp extends StatelessWidget {
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF0A0A0A),
         primaryColor: const Color(0xFF2563EB),
+        // Acessibilidade (Fase 3): fontes maiores e mais espaçamento para
+        // o público 55-75 anos.
+        textTheme: ThemeData.dark().textTheme.apply(fontSizeFactor: 1.1),
+        visualDensity: VisualDensity.comfortable,
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            minimumSize: const Size(0, 52),
+            textStyle: const TextStyle(fontSize: 16),
+          ),
+        ),
       ),
       home: home,
     );

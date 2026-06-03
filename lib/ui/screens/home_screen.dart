@@ -8,6 +8,9 @@ import '../../services/supabase_service.dart';
 import '../../screens/widgets/technical_dashboard.dart';
 import 'training_dashboard.dart';
 import 'calibration_screen.dart';
+import 'progress_screen.dart';
+import 'sentence_training_screen.dart';
+import 'widgets/self_perception_prompt.dart';
 
 /// HOME SCREEN: Dashboard Central de Progressão [ORQUESTRADOR]
 class HomeScreen extends StatefulWidget {
@@ -28,6 +31,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _checkPermissions();
     _loadAccuracyHistory();
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAskSelfPerception());
+  }
+
+  Future<void> _maybeAskSelfPerception() async {
+    try {
+      final last = await SupabaseService().getLastSelfPerceptionDate();
+      final due = last == null ||
+          DateTime.now().difference(last) > const Duration(days: 7);
+      if (!due || !mounted) return;
+      await SelfPerceptionPrompt.show(
+        context,
+        onSubmit: (score) async {
+          try {
+            await SupabaseService().saveSelfPerception(score);
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Obrigado por compartilhar!")),
+              );
+            }
+          } catch (e) {
+            debugPrint("Erro ao salvar autopercepção: $e");
+          }
+        },
+      );
+    } catch (e) {
+      debugPrint("Erro na autopercepção: $e");
+    }
   }
 
   @override
@@ -95,10 +125,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               const SizedBox(height: 30),
               _buildProgressCard(controller.totalXP),
               const SizedBox(height: 30),
-              const Text("Sua evolução",
-                style: TextStyle(color: Colors.white24, fontSize: 10, letterSpacing: 2)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("Sua evolução",
+                      style: TextStyle(
+                          color: Colors.white24,
+                          fontSize: 10,
+                          letterSpacing: 2)),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (_) => const ProgressScreen()),
+                    ),
+                    child: const Text("Ver detalhes",
+                        style: TextStyle(
+                            color: Color(0xFF2563EB), fontSize: 13)),
+                  ),
+                ],
+              ),
               const SizedBox(height: 15),
-              _buildEvolutionChart(),
+              GestureDetector(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const ProgressScreen()),
+                ),
+                child: _buildEvolutionChart(),
+              ),
               const Spacer(),
               _buildStartButton(context),
             ],
@@ -249,7 +301,59 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _buildLevelCard(context, 3, "De que lado vem o som", "Requer assinatura", isLocked: true),
         const SizedBox(height: 12),
         _buildLevelCard(context, 4, "Entender no barulho", "Requer assinatura", isLocked: true),
+        const SizedBox(height: 12),
+        _buildSentenceCard(context),
       ],
+    );
+  }
+
+  Widget _buildSentenceCard(BuildContext context) {
+    return InkWell(
+      onTap: () async {
+        final hasAccess = await GatekeeperService().checkAccess(4);
+        if (!context.mounted) return;
+        if (!hasAccess) {
+          _showPaywall(context);
+          return;
+        }
+        final audiogram = await SupabaseService().getLatestAudiogram();
+        if (!context.mounted) return;
+        if (audiogram == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text("Faça primeiro o teste de audição para liberar este treino.")),
+          );
+          return;
+        }
+        Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => SentenceTrainingScreen(audiogram: audiogram)));
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF111111),
+          border: Border.all(color: Colors.white10),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text("Frases do dia a dia",
+                    style: TextStyle(
+                        color: Colors.white38,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'monospace')),
+                Text("Requer assinatura",
+                    style: TextStyle(color: Color(0xFFE11D48), fontSize: 8)),
+              ],
+            ),
+            const Icon(Icons.lock_outline, color: Colors.white10, size: 20),
+          ],
+        ),
+      ),
     );
   }
 
