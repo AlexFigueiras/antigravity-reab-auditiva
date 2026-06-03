@@ -3,9 +3,11 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../core/gamification_controller.dart';
+import '../../models/audiogram.dart';
 import '../../services/gatekeeper_service.dart';
 import '../../services/supabase_service.dart';
 import '../../screens/widgets/technical_dashboard.dart';
+import '../../screens/threshold_test_screen.dart';
 import 'training_dashboard.dart';
 import 'calibration_screen.dart';
 import 'progress_screen.dart';
@@ -24,6 +26,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _hasPermissions = false;
   bool _isPermanentlyDenied = false;
   List<Map<String, dynamic>> _accuracyHistory = [];
+  bool _hasAudiogram = false;
 
   @override
   void initState() {
@@ -75,7 +78,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _loadAccuracyHistory() async {
     final history = await SupabaseService().getAccuracyHistory();
-    if (mounted) setState(() => _accuracyHistory = history);
+    final audiogram = await SupabaseService().getLatestAudiogram();
+    if (mounted) setState(() {
+      _accuracyHistory = history;
+      _hasAudiogram = audiogram != null;
+    });
   }
 
   Future<void> _checkPermissions() async {
@@ -296,6 +303,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _buildStartButton(BuildContext context) {
     return Column(
       children: [
+        _buildAudiogramCard(context),
+        const SizedBox(height: 12),
         _buildLevelCard(context, 2, "Distinguir sons", "Disponível"),
         const SizedBox(height: 12),
         _buildLevelCard(context, 3, "De que lado vem o som", "Requer assinatura", isLocked: true),
@@ -304,6 +313,84 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         const SizedBox(height: 12),
         _buildSentenceCard(context),
       ],
+    );
+  }
+
+  Widget _buildAudiogramCard(BuildContext context) {
+    final isDone = _hasAudiogram;
+    return InkWell(
+      onTap: () async {
+        final result = await Navigator.of(context).push<Map<String, dynamic>>(
+          MaterialPageRoute(builder: (_) => const ThresholdTestScreen()),
+        );
+        if (result == null || !context.mounted) return;
+        final leftEar = (result['left'] as List<AudiometryPoint>?) ?? [];
+        final rightEar = (result['right'] as List<AudiometryPoint>?) ?? [];
+        if (leftEar.isEmpty && rightEar.isEmpty) return;
+        try {
+          final user = await SupabaseService().getLatestAudiogram();
+          final audiogram = Audiogram(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            patientId: user?.patientId ?? 'local',
+            date: DateTime.now(),
+            leftEar: leftEar,
+            rightEar: rightEar,
+          );
+          await SupabaseService().saveAudiogram(audiogram);
+          if (context.mounted) {
+            setState(() => _hasAudiogram = true);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Teste salvo! O treino agora é personalizado para você.")),
+            );
+          }
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Erro ao salvar o teste. Tente novamente.")),
+            );
+          }
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDone ? const Color(0xFF111111) : const Color(0xFF0D2137),
+          border: Border.all(
+            color: isDone ? Colors.white12 : const Color(0xFF2563EB),
+            width: isDone ? 1 : 2,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Teste de audição",
+                  style: TextStyle(
+                    color: isDone ? Colors.white54 : Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  isDone ? "Feito — refazer a qualquer hora" : "Faça primeiro — personaliza todo o treino",
+                  style: TextStyle(
+                    color: isDone ? Colors.white24 : const Color(0xFF2563EB),
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
+            Icon(
+              isDone ? Icons.check_circle_outline : Icons.hearing,
+              color: isDone ? Colors.white24 : const Color(0xFF2563EB),
+              size: 24,
+            ),
+          ],
+        ),
+      ),
     );
   }
 

@@ -166,22 +166,22 @@ no celular. Nada de painel falso. Cada fase deixa o app melhor de verdade.
 Definir quem ajudamos, o que tratamos e como medimos. ✅ feito ao ler isto.
 
 ### Fase 1 — Tornar honesto e humano *(maior impacto, menor risco)*
-- [ ] **Ligar audiograma → treino** (consertar `getSmartPhoneme`): treinar os sons
-      que a pessoa realmente perde. *Maior ganho clínico do projeto.*
-- [ ] **Reescrever a linguagem** da interface (tabela da seção 7).
-- [ ] **Substituir o gráfico falso** por progresso real (acerto por som no tempo).
-- [ ] **Remover a "fadiga neural"** / bloqueio de 4h.
+- ✅ **Ligar audiograma → treino** (`getSmartPhoneme` corrigido, audiograma carregado do Supabase).
+- ✅ **Reescrever a linguagem** da interface (tabela da seção 7 aplicada).
+- ✅ **Substituir o gráfico falso** por progresso real (acerto por sessão do Supabase).
+- ✅ **Remover a "fadiga neural"** / bloqueio de 4h.
 
 ### Fase 2 — Acolher e medir
-- [ ] **Onboarding que escuta:** perguntar idade, principal dificuldade, se usa
-      aparelho — e usar isso para acolher e ajustar.
-- [ ] **Calcular e mostrar o SRT** no módulo "Entender no barulho".
-- [ ] **Tela de progresso** clara e honesta, por som e por semana.
+- ✅ **Onboarding que escuta:** coleta idade, principal dificuldade, uso de aparelho.
+- ✅ **Teste de audição ligado à home:** card de destaque, lançado também no onboarding,
+      resultado salvo como audiograma e usado para personalizar o treino.
+- ✅ **Calcular e mostrar o SRT** (média dos pontos de reversão do staircase).
+- ✅ **Tela de progresso** clara: histórico de acertos, sons mais difíceis, SRT recente.
 
 ### Fase 3 — Transferência para a vida real
-- [ ] **Módulo de frases** no ruído (não só palavras isoladas).
-- [ ] **Autopercepção semanal** (1–5) e correlação com o treino.
-- [ ] Polir acessibilidade (fonte, contraste, voz, compatibilidade com aparelho).
+- ✅ **Módulo de frases** do dia a dia no ruído (`sentence_training_screen.dart`).
+- ✅ **Autopercepção semanal** (1–5), pergunta a cada 7 dias, salva em `self_perception`.
+- ✅ Acessibilidade: fontes 10% maiores, densidade confortável.
 
 ### Pendências técnicas herdadas (de auditorias anteriores)
 - [ ] Integração real do pagamento (Stripe) — hoje o paywall não concede acesso
@@ -191,7 +191,51 @@ Definir quem ajudamos, o que tratamos e como medimos. ✅ feito ao ler isto.
 
 ---
 
-## 9. Decisões em aberto (a definir com o time clínico)
+## 9. Como criar um novo módulo de treino ("skill")
+
+Cada módulo é um **padrão de 4 peças**. Copie o molde abaixo e adapte:
+
+### Passo 1 — Declarar o nível no enum
+Em `lib/models/rehab_session.dart`, adicione um valor em `RehabLevel`:
+```dart
+novoModulo(5, unlockThreshold: 80.0), // libera o próximo com 80% de acerto
+```
+
+### Passo 2 — Criar o banco de estímulos
+Crie `lib/core/meu_estimulo_bank.dart`:
+```dart
+const List<Map<String, dynamic>> MEU_ESTIMULO_DATA = [
+  {'target': 'Frase correta', 'distractor': 'Frase parecida', 'dificuldade': 'fácil'},
+  ...
+];
+```
+
+### Passo 3 — Criar a tela (copie o molde)
+Copie `lib/ui/screens/sentence_training_screen.dart` como ponto de partida.
+Ele já tem: staircase adaptativo de SNR, cálculo de SRT, salvar `RehabSession`,
+resultado em português humano. Troque os dados e o motor de áudio que precisar:
+- Som puro → `AudioRehabEngine().playPureTone(...)`
+- Palavra isolada → `AudioRehabEngine().playPhonemicStimulus(...)`
+- Frase no ruído → `AudioServiceManager().engine.playCocktailStimulus(...)`
+- Direção espacial → `AudioRehabEngine().playSpatialStimulus(...)`
+
+### Passo 4 — Adicionar o card na home
+Em `lib/ui/screens/home_screen.dart`, em `_buildStartButton()`, adicione:
+```dart
+_buildLevelCard(context, 5, "Nome humano do módulo", "Disponível"),
+```
+Ligue ao `GatekeeperService().checkAccess(5)` para controle de acesso.
+
+### Regras inegociáveis para qualquer módulo novo
+- **Uma métrica clínica clara** (% acerto, SRT, tempo de reação…) — definir antes de codar.
+- **Resultado em linguagem humana** — nunca mostrar dB, SNR ou siglas cruas ao usuário.
+- **Salvar `RehabSession`** com `level`, `totalTrials`, `correctAnswers`, `metadata` incluindo log de tentativas.
+- **Sem punição** — erros ensinam, não bloqueiam.
+- **Testar no celular** antes de marcar como feito.
+
+---
+
+## 10. Decisões em aberto (a definir com o time clínico)
 - Frequência e duração ideais de sessão (evidência sugere curto e diário).
 - Quantos contrastes treinar por sessão.
 - Critério de "alta" / quando a pessoa atingiu o platô de melhora.

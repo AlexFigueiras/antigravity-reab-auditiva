@@ -166,8 +166,8 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
         backgroundColor: Colors.transparent, 
         elevation: 0,
         title: const Text(
-          "CALIBRAÇÃO CLÍNICA", 
-          style: TextStyle(letterSpacing: 2, fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey),
+          "Teste de audição",
+          style: TextStyle(letterSpacing: 1, fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey),
         ),
       ),
       body: Container(
@@ -202,7 +202,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                     ),
                   ),
                   Text(
-                    _currentEar == EarSide.left ? "OUVIDO ESQUERDO" : "OUVIDO DIREITO",
+                    _currentEar == EarSide.left ? "Ouvido esquerdo" : "Ouvido direito",
                     style: TextStyle(
                       color: _currentEar == EarSide.left ? Colors.blueAccent : Colors.redAccent, 
                       fontWeight: FontWeight.w900,
@@ -263,12 +263,12 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                     elevation: 10,
                   ),
                   onPressed: _startFrequencyTest, 
-                  child: const Text("INICIAR PROTOCOLO", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                  child: const Text("Começar o teste", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                 ),
               ),
             ] else if (_testFinished) ...[
               const Text(
-                "CURVA DO AUDIOGRAMA", 
+                "Resultado do teste", 
                 style: TextStyle(fontSize: 18, color: Colors.blueAccent, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 24),
@@ -341,7 +341,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                     'left': _leftEarPoints,
                     'right': _rightEarPoints,
                   }), 
-                  child: const Text("SALVAR E VOLTAR", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                  child: const Text("Salvar e voltar", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                 ),
               ),
             ] else ...[

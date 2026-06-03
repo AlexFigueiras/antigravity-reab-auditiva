@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../audio_engine/audio_engine.dart';
+import '../../models/audiogram.dart';
+import '../../screens/threshold_test_screen.dart';
+import '../../services/supabase_service.dart';
 import 'home_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -27,9 +30,33 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       }).eq('user_id', user.id);
     }
     if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      // Sugere o teste de audição logo após o onboarding — é a fundação da personalização
+      final result = await Navigator.of(context).push<Map<String, dynamic>>(
+        MaterialPageRoute(builder: (_) => const ThresholdTestScreen()),
       );
+      if (result != null && mounted) {
+        final leftEar = (result['left'] as List<AudiometryPoint>?) ?? [];
+        final rightEar = (result['right'] as List<AudiometryPoint>?) ?? [];
+        if (leftEar.isNotEmpty || rightEar.isNotEmpty) {
+          try {
+            final audiogram = Audiogram(
+              id: DateTime.now().millisecondsSinceEpoch.toString(),
+              patientId: 'local',
+              date: DateTime.now(),
+              leftEar: leftEar,
+              rightEar: rightEar,
+            );
+            await SupabaseService().saveAudiogram(audiogram);
+          } catch (e) {
+            debugPrint("Erro ao salvar audiograma do onboarding: $e");
+          }
+        }
+      }
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
+      }
     }
   }
 
