@@ -1,5 +1,3 @@
-import 'package:ear_training/models/audiogram.dart';
-
 enum RehabLevel {
   toneIsolation(1, unlockThreshold: 90.0),
   phonemicDiscrimination(2, unlockThreshold: 85.0),

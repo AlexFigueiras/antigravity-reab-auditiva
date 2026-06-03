@@ -17,7 +17,6 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
   late Timer _ticker;
   double _dspLoad = 0.0;
   int _xRuns = 0;
-  bool _isSoftKneeActive = false;
   double _softKneeOpacity = 0.0;
   List<String> _pendingFiles = [];
   String _socModel = "Detecting...";
@@ -37,11 +36,9 @@ class _TechnicalDashboardState extends State<TechnicalDashboard> {
         _dspLoad = native.getDspLoad();
         _xRuns = native.getXRunCount();
         if (hit) {
-          _isSoftKneeActive = true;
           _softKneeOpacity = 1.0;
         } else {
           _softKneeOpacity = (_softKneeOpacity - 0.1).clamp(0.0, 1.0);
-          if (_softKneeOpacity == 0.0) _isSoftKneeActive = false;
         }
       });
     });

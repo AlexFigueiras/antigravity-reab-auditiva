@@ -51,7 +51,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _requestPermissions() async {
-    final results = await [
+    await [
       Permission.microphone,
       Permission.bluetoothConnect,
     ].request();

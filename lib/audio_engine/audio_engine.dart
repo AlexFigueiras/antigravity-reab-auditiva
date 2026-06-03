@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:io';
 import 'dart:ffi' as ffi;
 import 'package:ffi/ffi.dart';
@@ -14,7 +13,6 @@ class AudioRehabEngine {
   static final AudioRehabEngine _instance = AudioRehabEngine._internal();
   factory AudioRehabEngine() => _instance;
   bool _isInitialized = false;
-  String? _securePatientId;
   Audiogram? _currentAudiogram;
 
   final _nativeBridge = NativeDSPBridge();
@@ -153,8 +151,6 @@ class AudioRehabEngine {
     _nativeBridge.setNoiseIntensity(noiseIntensity.clamp(0.0, 1.0));
 
     // 2. Aplica EQ Clínico no Alvo (Camada 1)
-    double clinicalGainDb = getCompensatoryGain(freqBand);
-    
     // 3. Síntese
     final path = await _tts.synthesize(text);
     final bytes = await File(path).readAsBytes();
