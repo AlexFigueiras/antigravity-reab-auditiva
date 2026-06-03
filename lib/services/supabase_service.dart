@@ -121,4 +121,40 @@ class SupabaseService {
 
     return results.reversed.take(5).toList(); // Últimas 5 sessões em ordem cronológica
   }
+
+  /// Retorna o audiograma mais recente do usuário logado
+  Future<Audiogram?> getLatestAudiogram() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return null;
+    try {
+      final response = await Supabase.instance.client
+          .from('audiograms')
+          .select()
+          .eq('user_id', user.id)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (response == null) return null;
+      return Audiogram.fromJson(response);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Retorna as últimas sessões com acurácia para o gráfico de evolução
+  Future<List<Map<String, dynamic>>> getAccuracyHistory() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return [];
+    try {
+      final List<dynamic> response = await Supabase.instance.client
+          .from('rehab_sessions')
+          .select('date, accuracy, level')
+          .eq('user_id', user.id)
+          .order('date', ascending: true)
+          .limit(10);
+      return response.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
 }
