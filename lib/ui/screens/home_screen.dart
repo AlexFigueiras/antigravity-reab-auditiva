@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../core/gamification_controller.dart';
 import '../../services/gatekeeper_service.dart';
+import '../../services/supabase_service.dart';
 import '../../screens/widgets/technical_dashboard.dart';
 import 'training_dashboard.dart';
 import 'calibration_screen.dart';
@@ -19,11 +20,13 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _hasPermissions = false;
   bool _isPermanentlyDenied = false;
+  List<Map<String, dynamic>> _accuracyHistory = [];
 
   @override
   void initState() {
     super.initState();
     _checkPermissions();
+    _loadAccuracyHistory();
     WidgetsBinding.instance.addObserver(this);
   }
 
@@ -38,6 +41,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       _checkPermissions(); // Re-checa se o usuário voltou das configurações
     }
+  }
+
+  Future<void> _loadAccuracyHistory() async {
+    final history = await SupabaseService().getAccuracyHistory();
+    if (mounted) setState(() => _accuracyHistory = history);
   }
 
   Future<void> _checkPermissions() async {
@@ -87,7 +95,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               const SizedBox(height: 30),
               _buildProgressCard(controller.totalXP),
               const SizedBox(height: 30),
-              const Text("EVOLUÇÃO DO ÍNDICE DE ACUIDADE (IAB)", 
+              const Text("Sua evolução",
                 style: TextStyle(color: Colors.white24, fontSize: 10, letterSpacing: 2)),
               const SizedBox(height: 15),
               _buildEvolutionChart(),
@@ -111,7 +119,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             children: [
               const Icon(Icons.security, color: Color(0xFFE11D48), size: 64),
               const SizedBox(height: 24),
-              const Text("ACESSO RESTRITO", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 4)),
+              const Text("Precisamos de permissões", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 4)),
               const SizedBox(height: 16),
               Text(
                 "A reabilitação neural exige acesso ao Microfone (para calibração) e ao Bluetooth (detecção de fones).",
@@ -147,9 +155,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("BOSYN - REABILITAÇÃO NEURAL", style: TextStyle(color: Colors.white38, letterSpacing: 5, fontSize: 10)),
+            const Text("TREINO AUDITIVO", style: TextStyle(color: Colors.white38, letterSpacing: 5, fontSize: 10)),
             const SizedBox(height: 8),
-            Text("STATUS: $level", style: const TextStyle(color: Color(0xFF00FF41), fontSize: 28, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
+            Text(level, style: const TextStyle(color: Color(0xFF00FF41), fontSize: 28, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
             Container(height: 2, width: 120, color: const Color(0xFF00FF41).withOpacity(0.5)),
           ],
         ),
@@ -172,7 +180,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("XP ACUMULADO", style: TextStyle(color: Colors.white38, fontSize: 8)),
+              const Text("Pontos de treino", style: TextStyle(color: Colors.white38, fontSize: 8)),
               Text(xp.toString().padLeft(6, '0'), style: const TextStyle(color: Colors.white, fontSize: 24, fontFamily: 'monospace')),
             ],
           ),
@@ -183,31 +191,49 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildEvolutionChart() {
+    if (_accuracyHistory.isEmpty) {
+      return Container(
+        height: 120,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(color: const Color(0xFF1A1A1A), border: Border.all(color: Colors.white12)),
+        child: const Center(
+          child: Text(
+            "Faça seu primeiro treino para ver sua evolução aqui.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white38, fontSize: 13),
+          ),
+        ),
+      );
+    }
+    final spots = _accuracyHistory.asMap().entries.map((e) {
+      final acc = (e.value['accuracy'] as num?)?.toDouble() ?? 0.0;
+      return FlSpot(e.key.toDouble(), acc);
+    }).toList();
     return Container(
-      height: 220,
+      height: 180,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: const Color(0xFF1A1A1A), border: Border.all(color: Colors.white12)),
       child: LineChart(
         LineChartData(
           gridData: const FlGridData(show: true, drawVerticalLine: false, horizontalInterval: 20),
-          titlesData: const FlTitlesData(show: false),
+          titlesData: FlTitlesData(
+            show: true,
+            leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 30, getTitlesWidget: (v, _) => Text('${v.toInt()}%', style: const TextStyle(color: Colors.white38, fontSize: 9)))),
+            bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          ),
           borderData: FlBorderData(show: false),
-          minX: 0, maxX: 6, minY: 0, maxY: 100,
+          minX: 0, maxX: (spots.length - 1).toDouble().clamp(1, double.infinity), minY: 0, maxY: 100,
           lineBarsData: [
             LineChartBarData(
-              spots: [
-                const FlSpot(0, 20), const FlSpot(1, 35), const FlSpot(2, 30),
-                const FlSpot(3, 50), const FlSpot(4, 65), const FlSpot(5, 60), const FlSpot(6, 88),
-              ],
+              spots: spots,
               isCurved: true,
-              color: const Color(0xFF00FF41),
+              color: const Color(0xFF2563EB),
               barWidth: 3,
               isStrokeCapRound: true,
-              dotData: const FlDotData(show: false),
-              belowBarData: BarAreaData(
-                show: true,
-                color: const Color(0xFF00FF41).withOpacity(0.1),
-              ),
+              dotData: const FlDotData(show: true),
+              belowBarData: BarAreaData(show: true, color: const Color(0xFF2563EB).withOpacity(0.1)),
             ),
           ],
         ),
@@ -218,11 +244,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _buildStartButton(BuildContext context) {
     return Column(
       children: [
-        _buildLevelCard(context, 2, "CALIBRAÇÃO FONÊMICA", "ACESSO LIBERADO"),
+        _buildLevelCard(context, 2, "Distinguir sons", "Disponível"),
         const SizedBox(height: 12),
-        _buildLevelCard(context, 3, "ESCALONAMENTO ESPACIAL", "REQUER PRO", isLocked: true),
+        _buildLevelCard(context, 3, "De que lado vem o som", "Requer assinatura", isLocked: true),
         const SizedBox(height: 12),
-        _buildLevelCard(context, 4, "AMBIENTE HOSTIL [COQUETEL]", "REQUER PRO", isLocked: true),
+        _buildLevelCard(context, 4, "Entender no barulho", "Requer assinatura", isLocked: true),
       ],
     );
   }
@@ -274,10 +300,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("BOSYN PRO REQUERIDO", style: TextStyle(color: Color(0xFF00FF41), fontSize: 20, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
+              const Text("BOSYN Pro", style: TextStyle(color: Color(0xFF00FF41), fontSize: 20, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
               const SizedBox(height: 12),
               const Text(
-                "O treinamento avançado de Escalonamento Espacial e Efeito Coquetel exige processamento neural de alta densidade sincronizado com a nuvem.",
+                "Os módulos de direção do som e entender no barulho estão disponíveis com a assinatura.",
                 style: TextStyle(color: Colors.white70, fontSize: 12),
               ),
               const SizedBox(height: 30),
@@ -301,7 +327,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       );
                     }
                   },
-                  child: const Text("ATIVAR ACESSO ELITE", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2)),
+                  child: const Text("Assinar BOSYN Pro", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2)),
                 ),
               ),
             ],

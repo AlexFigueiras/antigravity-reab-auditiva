@@ -29,18 +29,18 @@ class MissionReportScreen extends StatelessWidget {
               _buildHeader(),
               const SizedBox(height: 40),
               _buildMetricCard(
-                "REPORTAGEM DE CAMPO",
-                "MISSÃO CONCLUÍDA",
+                "Resultado",
+                "Muito bem!",
                 const Color(0xFF00FF41),
               ),
               const SizedBox(height: 20),
               Expanded(
                 child: ListView(
                   children: [
-                    _buildDataRow("XP DA SESSÃO", "+$sessionXP", Colors.white70),
-                    _buildDataRow("LIMIAR DE RUÍDO (SNR)", "$noiseThreshold dB", const Color(0xFFFFBF00)),
-                    _buildDataRow("NÍVEL DE ACUIDADE (IAB)", controller.acuityLevel, const Color(0xFF2563EB)),
-                    _buildDataRow("XP TOTAL ACUMULADO", "${controller.totalXP}", Colors.white38),
+                    _buildDataRow("Acertos nesta sessão", "+$sessionXP", Colors.white70),
+                    _buildDataRow("Barulho aguentado (dB)", "$noiseThreshold dB", const Color(0xFFFFBF00)),
+                    _buildDataRow("Sua evolução", controller.acuityLevel, const Color(0xFF2563EB)),
+                    _buildDataRow("Total de pontos", "${controller.totalXP}", Colors.white38),
                   ],
                 ),
               ),
@@ -56,7 +56,7 @@ class MissionReportScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("ANÁLISE DE PERFORMANCE", style: TextStyle(color: Colors.white24, letterSpacing: 4, fontSize: 10)),
+        const Text("Treino de hoje", style: TextStyle(color: Colors.white24, letterSpacing: 4, fontSize: 10)),
         const SizedBox(height: 8),
         Container(height: 2, width: 60, color: const Color(0xFF00FF41)),
       ],
@@ -116,7 +116,7 @@ class MissionReportScreen extends StatelessWidget {
               noiseThreshold: noiseThreshold,
               sessionXP: sessionXP,
             ),
-            child: const Text("EXPORTAR PDF CLÍNICO", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+            child: const Text("Exportar relatório", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.5)),
           ),
         ),
         const SizedBox(height: 12),
@@ -130,7 +130,7 @@ class MissionReportScreen extends StatelessWidget {
               shape: const BeveledRectangleBorder(),
             ),
             onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
-            child: const Text("RETORNAR AO DASHBOARD CENTRAL", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.5, fontSize: 10)),
+            child: const Text("Voltar ao início", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.5, fontSize: 10)),
           ),
         ),
       ],

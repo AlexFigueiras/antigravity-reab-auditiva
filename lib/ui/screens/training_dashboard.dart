@@ -4,6 +4,7 @@ import '../../core/gamification_controller.dart';
 import '../../core/phoneme_map.dart';
 import '../../core/spatial_controller.dart';
 import '../../services/audio_service_manager.dart';
+import '../../services/supabase_service.dart';
 import 'mission_report_screen.dart';
 import 'dart:math' as math;
 
@@ -26,6 +27,7 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
   double _targetPanning = 0.0;
   bool _isCorrectPulse = false;
   int _sessionXP = 0; // Tracking local da sessão
+  List<Map<String, dynamic>> _audiogramData = [];
 
   @override
   void initState() {
@@ -34,6 +36,19 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     );
+    _loadAudiogram();
+  }
+
+  Future<void> _loadAudiogram() async {
+    final audiogram = await SupabaseService().getLatestAudiogram();
+    if (audiogram == null) return;
+    final data = <Map<String, dynamic>>[];
+    for (final p in audiogram.leftEar) {
+      final right = audiogram.rightEar.where((r) => r.frequency == p.frequency).firstOrNull;
+      final avgThreshold = right != null ? (p.threshold + right.threshold) / 2 : p.threshold;
+      data.add({'frequency': p.frequency, 'threshold': avgThreshold});
+    }
+    if (mounted) setState(() => _audiogramData = data);
   }
 
   @override
@@ -63,10 +78,6 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
   }
 
   void _startExercise() {
-    if (context.read<GamificationController>().neuralEnergy <= 0) {
-      _finishSession();
-      return;
-    }
     if (_currentLevel == 2) {
       _startLevel2();
     } else if (_currentLevel == 3) {
@@ -79,7 +90,7 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
   void _startLevel2() {
     final controller = context.read<GamificationController>();
     // Seleção Inteligente baseada no perfil clínico
-    final phoneme = controller.getSmartPhoneme([]); 
+    final phoneme = controller.getSmartPhoneme(_audiogramData);
     
     setState(() {
       _currentStimulus = phoneme;
@@ -95,7 +106,7 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
     final environments = ['RESTAURANTE', 'TRÂNSITO', 'VENTO'];
     
     setState(() {
-      _currentStimulus = controller.getSmartPhoneme([]);
+      _currentStimulus = controller.getSmartPhoneme(_audiogramData);
       _isTrainingActive = true;
     });
     
@@ -122,7 +133,6 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
       Future.delayed(const Duration(seconds: 2), _startLevel2);
     } else {
       controller.consumeEnergy();
-      if (controller.neuralEnergy <= 0) _finishSession();
       setState(() => _extraBoost += 3.0);
       _playLevel2Stimulus();
     }
@@ -163,7 +173,6 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
       Future.delayed(const Duration(seconds: 2), _startLevel4);
     } else {
       gamification.consumeEnergy();
-      if (gamification.neuralEnergy <= 0) _finishSession();
       Future.delayed(const Duration(seconds: 1), _startLevel4);
     }
   }
@@ -258,11 +267,11 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          _levelTab(2, "CALIBRAR"),
+          _levelTab(2, "Sons parecidos"),
           const SizedBox(width: 8),
-          _levelTab(3, "ESPAÇO"),
+          _levelTab(3, "De que lado"),
           const SizedBox(width: 8),
-          _levelTab(4, "COQUETEL"),
+          _levelTab(4, "No barulho"),
         ],
       ),
     );
@@ -323,7 +332,7 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("SIGNAL-TO-NOISE RATIO", style: TextStyle(color: Colors.white38, fontSize: 8)),
+              const Text("Barulho de fundo", style: TextStyle(color: Colors.white38, fontSize: 8)),
               Text("${snr.toStringAsFixed(1)} dB", style: TextStyle(color: isCritical ? const Color(0xFFE11D48) : const Color(0xFF00FF41), fontFamily: 'monospace', fontSize: 16, fontWeight: FontWeight.bold)),
             ],
           ),
@@ -346,7 +355,7 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
         AudioServiceManager().forceStopAll();
         _startLevel4();
       },
-      child: const Text("RECALIBRAR AMBIENTE [RESET SNR]", style: TextStyle(color: Color(0xFFFFBF00), fontSize: 10, fontFamily: 'monospace', decoration: TextDecoration.underline)),
+      child: const Text("Recomeçar mais fácil", style: TextStyle(color: Color(0xFFFFBF00), fontSize: 10, fontFamily: 'monospace', decoration: TextDecoration.underline)),
     );
   }
 
@@ -379,11 +388,11 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
             const SizedBox(height: 30),
             Row(
               children: [
-                _buildIndustrialButton("90° L", () => _handleN3Choice(-1.0)),
+                _buildIndustrialButton("Esquerda", () => _handleN3Choice(-1.0)),
                 const SizedBox(width: 10),
-                _buildIndustrialButton("00° C", () => _handleN3Choice(0.0)),
+                _buildIndustrialButton("Centro", () => _handleN3Choice(0.0)),
                 const SizedBox(width: 10),
-                _buildIndustrialButton("90° R", () => _handleN3Choice(1.0)),
+                _buildIndustrialButton("Direita", () => _handleN3Choice(1.0)),
               ],
             ),
           ],
@@ -422,7 +431,7 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
           mainAxisSize: MainAxisSize.min,
           children: [
             Text("${_currentStimulus?['freq_band'] ?? 0} HZ", style: const TextStyle(color: Color(0xFF00FF41), fontSize: 22, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
-            const Text("TRACKING ALIVE", style: TextStyle(color: Colors.white24, fontSize: 8)),
+            const Text("Ouça e escolha", style: TextStyle(color: Colors.white24, fontSize: 8)),
           ],
         ),
       ],
@@ -436,7 +445,7 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text("SYSTEM TELEMETRY", style: TextStyle(color: Colors.white38, fontSize: 10)),
+              const Text("Seu nível", style: TextStyle(color: Colors.white38, fontSize: 10)),
               Text(controller.acuityLevel, style: const TextStyle(color: Color(0xFF00FF41), fontSize: 20, fontFamily: 'monospace')),
             ]),
             _buildStatCard("XP", controller.totalXP.toString()),
@@ -474,27 +483,24 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
     return const Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.radar, color: Colors.white10, size: 80),
+        Icon(Icons.hearing, color: Colors.white10, size: 80),
         SizedBox(height: 20),
-        Text("RADAR EM STANDBY", style: TextStyle(color: Colors.white24, fontFamily: 'monospace', letterSpacing: 5)),
+        Text("Pronto para começar", style: TextStyle(color: Colors.white24, fontFamily: 'monospace', letterSpacing: 5)),
       ],
     );
   }
 
   Widget _buildControlPanel() {
-    final gamification = context.watch<GamificationController>();
-    final canStart = gamification.hasEnergy;
-    final restRemaining = gamification.remainingRestTime;
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (!canStart)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
+        if (context.watch<GamificationController>().neuralEnergy <= 2)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 10),
             child: Text(
-              "FADIGA NEURAL DETECTADA. REPOUSO: ${restRemaining.inHours}h ${restRemaining.inMinutes % 60}m",
-              style: const TextStyle(color: Color(0xFFE11D48), fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'monospace'),
+              "Bom esforço! Pode continuar ou voltar amanhã.",
+              style: TextStyle(color: Color(0xFFFFBF00), fontSize: 12),
+              textAlign: TextAlign.center,
             ),
           ),
         SizedBox(
@@ -502,11 +508,11 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
           height: 50,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: _isTrainingActive ? const Color(0xFFE11D48) : (canStart ? const Color(0xFF2563EB) : Colors.white10),
+              backgroundColor: _isTrainingActive ? const Color(0xFFE11D48) : const Color(0xFF2563EB),
               shape: const BeveledRectangleBorder(),
             ),
-            onPressed: (!canStart && !_isTrainingActive) ? null : () => _isTrainingActive ? setState(() => _isTrainingActive = false) : _startExercise(),
-            child: Text(_isTrainingActive ? "ABORTAR" : "INICIAR PROTOCOLO N$_currentLevel"),
+            onPressed: () => _isTrainingActive ? setState(() => _isTrainingActive = false) : _startExercise(),
+            child: Text(_isTrainingActive ? "Parar" : "Começar o treino"),
           ),
         ),
       ],
