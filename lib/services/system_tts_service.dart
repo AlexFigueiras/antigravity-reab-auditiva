@@ -26,14 +26,55 @@ class SystemTtsService {
   }
 
   late final FlutterTts _tts;
+  List<String> _ptVoices = [];
+  int _voiceCycleIndex = 0;
+  bool _voicesLoaded = false;
+
+  Future<void> _loadPtVoices() async {
+    if (_voicesLoaded) return;
+    try {
+      final voices = await _tts.getVoices;
+      if (voices != null) {
+        final List<Map<String, dynamic>> parsedVoices = voices
+            .map((v) => Map<String, dynamic>.from(v as Map))
+            .toList()
+            .cast<Map<String, dynamic>>();
+
+        _ptVoices = parsedVoices
+            .where((v) {
+              final locale = (v['locale'] as String?)?.toLowerCase() ?? '';
+              return locale.startsWith('pt-br') || locale.startsWith('pt-pt');
+            })
+            .map((v) => (v['name'] as String?) ?? '')
+            .where((name) => name.isNotEmpty)
+            .toList();
+      }
+    } catch (_) {}
+    _voicesLoaded = true;
+  }
 
   Future<void> _ensureConfigured({
     required String languageCode,
     required double speakingRate,
     required double pitch,
+    String? voiceName,
   }) async {
     // Sempre reaplica idioma/voz: o motor pode ter sido usado com outros params.
     await _tts.setLanguage(languageCode);
+    if (voiceName != null) {
+      try {
+        final voices = await _tts.getVoices;
+        if (voices != null) {
+          final voice = voices.firstWhere(
+            (v) => v['name'] == voiceName,
+            orElse: () => null,
+          );
+          if (voice != null) {
+            await _tts.setVoice(Map<String, String>.from(voice as Map));
+          }
+        }
+      } catch (_) {}
+    }
     // flutter_tts usa escala 0.0–1.0 para a velocidade no Android (0.5 ≈ normal).
     // Mapeamos speakingRate (1.0 = normal) para essa escala de forma estável.
     await _tts.setSpeechRate((speakingRate * 0.5).clamp(0.0, 1.0));
@@ -47,8 +88,17 @@ class SystemTtsService {
     String languageCode = 'pt-BR',
     double speakingRate = 1.0,
     double pitch = 0.0,
+    String? voiceName,
   }) async {
-    final cacheKey = _cacheKey(text, languageCode, speakingRate, pitch);
+    await _loadPtVoices();
+
+    String? activeVoice = voiceName;
+    if (activeVoice == null && _ptVoices.isNotEmpty) {
+      activeVoice = _ptVoices[_voiceCycleIndex % _ptVoices.length];
+      _voiceCycleIndex++;
+    }
+
+    final cacheKey = _cacheKey(text, languageCode, speakingRate, pitch, activeVoice);
     final cacheFile = await _cacheFile(cacheKey);
 
     if (await cacheFile.exists() && await cacheFile.length() > 44) {
@@ -60,11 +110,12 @@ class SystemTtsService {
       languageCode: languageCode,
       speakingRate: speakingRate,
       pitch: pitch,
+      voiceName: activeVoice,
     );
 
     // Pede a síntese gravando diretamente no caminho absoluto de cache
     // (isFullPath: true). Algumas engines OEM ignoram o caminho e gravam no
-    // diretório de arquivos do app; _resolveGeneratedFile cobre esse caso.
+    // diretório de arquivos do app; _resolveGeneratedFile deita esse caso.
     final fileName = 'tts_$cacheKey.wav';
     final result =
         await _tts.synthesizeToFile(text, cacheFile.path, true);
@@ -119,8 +170,8 @@ class SystemTtsService {
     }
   }
 
-  String _cacheKey(String text, String lang, double rate, double pitch) {
-    final input = '$text|$lang|$rate|$pitch';
+  String _cacheKey(String text, String lang, double rate, double pitch, String? voiceName) {
+    final input = '$text|$lang|$rate|$pitch|${voiceName ?? "default"}';
     return md5.convert(utf8.encode(input)).toString();
   }
 

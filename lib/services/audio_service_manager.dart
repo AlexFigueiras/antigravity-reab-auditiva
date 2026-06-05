@@ -1,5 +1,6 @@
 import 'package:ear_training/audio_engine/audio_engine.dart';
 import 'package:flutter/foundation.dart';
+import 'listening_mode_service.dart';
 
 /// Centralizador do Gerenciamento de Áudio [ORQUESTRADOR]
 /// Garante o controle estrito do Ciclo de Vida do Motor C++/Dart.
@@ -25,8 +26,14 @@ class AudioServiceManager {
     }
   }
 
-  /// Inicializa o motor clínico com o audiograma atual
+  /// Inicializa o motor clínico com o audiograma atual.
+  ///
+  /// Antes de aplicar o EQ, carrega a política de escuta (com/sem aparelho): no
+  /// modo "com aparelho" o EQ de meia-perda fica DESLIGADO (o aparelho já
+  /// compensa). Ver 0.4/1.1.
   Future<void> initializeEngineForUser(dynamic audiogram) async {
+    await ListeningModeService().load();
+    _engine.setListeningMode(ListeningModeService().cached);
     await _engine.initializeEngine(audiogram);
   }
 

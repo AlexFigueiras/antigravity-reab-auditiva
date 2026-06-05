@@ -161,3 +161,25 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+-- ----------------------------------------------------------------------------
+-- outcome_tests: resultado do teste de desfecho independente (Matrix)
+-- ----------------------------------------------------------------------------
+create table if not exists public.outcome_tests (
+  id              uuid        primary key default gen_random_uuid(),
+  user_id         uuid        not null references auth.users (id) on delete cascade,
+  date            timestamptz not null default now(),
+  srt_db          double precision not null,
+  total_trials    int         not null default 0,
+  correct_answers int         not null default 0,
+  metadata        jsonb,
+  created_at      timestamptz not null default now()
+);
+create index if not exists outcome_tests_user_created_idx
+  on public.outcome_tests (user_id, created_at desc);
+
+alter table public.outcome_tests enable row level security;
+
+drop policy if exists "outcome_tests_all_own" on public.outcome_tests;
+create policy "outcome_tests_all_own" on public.outcome_tests
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

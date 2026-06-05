@@ -70,32 +70,24 @@ class RehabSession {
   /// Nível 2 (Distinguir sons) está sempre liberado após o audiograma.
   /// Nível 5 (Frases) exige assinatura — não entra aqui.
   static int calculateUnlockedLevel(List<RehabSession> history) {
-    int maxUnlocked = 2; // Nível 2 sempre começa liberado (com audiograma)
-
-    for (var level in RehabLevel.values) {
-      if (level == RehabLevel.speechInNoise) break; // nível 4 é o último desbloqueável por desempenho
-      if (level.value < 2) continue; // nível 1 (tone isolation) não é usado no fluxo atual
-
-      final sessionsForLevel = history
-          .where((s) => s.level == level)
-          .toList();
-      if (sessionsForLevel.length < 3) break; // precisa de pelo menos 3 sessões
-
-      // Média das 3 sessões mais recentes
-      final lastThree = sessionsForLevel
+    // Nível 2 (Distinguir sons) sempre começa liberado
+    // Se o nível 2 (phonemicDiscrimination) tiver média >= 70% nas últimas 3 sessões,
+    // então desbloqueia nível 3 E nível 4.
+    final sessionsL2 = history
+        .where((s) => s.level == RehabLevel.phonemicDiscrimination)
+        .toList();
+    if (sessionsL2.length >= 3) {
+      final lastThree = sessionsL2
           .reversed
           .take(3)
           .map((s) => s.accuracy)
           .toList();
-      final avgAccuracy = lastThree.reduce((a, b) => a + b) / lastThree.length;
-
-      if (avgAccuracy >= level.unlockThreshold) {
-        maxUnlocked = level.value + 1;
-      } else {
-        break;
+      final avgL2 = lastThree.reduce((a, b) => a + b) / lastThree.length;
+      if (avgL2 >= RehabLevel.phonemicDiscrimination.unlockThreshold) {
+        return 4; // Desbloqueia nível 3 e nível 4
       }
     }
-    return maxUnlocked.clamp(2, 4);
+    return 2;
   }
 
   /// Retorna a acurácia média das últimas [count] sessões de um nível.

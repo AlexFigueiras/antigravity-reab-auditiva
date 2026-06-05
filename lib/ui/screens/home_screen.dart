@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../models/audiogram.dart';
-import '../../models/rehab_session.dart';
 import '../../services/gatekeeper_service.dart';
 import '../../services/supabase_service.dart';
 import '../../screens/threshold_test_screen.dart';
 import 'training_dashboard.dart';
 import 'progress_screen.dart';
-import 'sentence_training_screen.dart';
+import 'sentence_hub_screen.dart';
 import 'widgets/self_perception_prompt.dart';
 
 /// Tela inicial: acolhedora, clara e simples. Pensada para 55–75 anos —
@@ -31,6 +30,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _unlockedLevel = 2;
   int _streak = 0;
   Map<int, double> _levelAccuracies = {};
+  double _todayMinutes = 0.0;
 
   // Paleta acolhedora — nada de verde fosfórico de "cockpit".
   static const Color _bg = Color(0xFF101418);
@@ -93,6 +93,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final history = await SupabaseService().getAccuracyHistory();
     final audiogram = await SupabaseService().getLatestAudiogram();
     final streak = await SupabaseService().getTrainingStreak();
+    final sessions = await SupabaseService().getAllSessions();
+
+    final today = DateTime.now();
+    final todayStart = DateTime(today.year, today.month, today.day);
+    final todaySessions = sessions.where((s) => s.date.isAfter(todayStart)).toList();
+    double totalMs = 0;
+    for (final s in todaySessions) {
+      final meta = s.metadata;
+      if (meta != null && meta['duration_ms'] != null) {
+        totalMs += (meta['duration_ms'] as num).toDouble();
+      } else {
+        totalMs += 180000; // 3 minutos de fallback
+      }
+    }
+    final todayMinutes = totalMs / 60000;
 
     // Calcular nível desbloqueado e acurácias por nível
     GatekeeperService().invalidateCache();
@@ -109,6 +124,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _unlockedLevel = unlockedLevel;
         _streak = streak;
         _levelAccuracies = levelAccs;
+        _todayMinutes = todayMinutes;
       });
     }
   }
@@ -147,6 +163,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               _buildGreeting(),
               const SizedBox(height: 24),
               _buildProgressSummary(),
+              const SizedBox(height: 16),
+              _buildDailyDoseWidget(),
               const SizedBox(height: 28),
               Text("Seus treinos",
                   style: TextStyle(
@@ -332,6 +350,89 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildDailyDoseWidget() {
+    final progress = (_todayMinutes / 15.0).clamp(0.0, 1.0);
+    final percent = (progress * 100).toInt();
+    final completed = _todayMinutes >= 15.0;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: _card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: completed ? const Color(0xFF3FB37F).withValues(alpha: 0.3) : _primary.withValues(alpha: 0.1),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          // Progresso circular com animação
+          SizedBox(
+            width: 60,
+            height: 60,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox.expand(
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0.0, end: progress),
+                    duration: const Duration(milliseconds: 1200),
+                    curve: Curves.easeOutBack,
+                    builder: (context, val, _) {
+                      return CircularProgressIndicator(
+                        value: val,
+                        strokeWidth: 6,
+                        color: completed ? const Color(0xFF3FB37F) : _primary,
+                        backgroundColor: _bg,
+                        strokeCap: StrokeCap.round,
+                      );
+                    },
+                  ),
+                ),
+                Text(
+                  "$percent%",
+                  style: TextStyle(
+                    color: completed ? const Color(0xFF3FB37F) : _textMain,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Meta diária (15 min)",
+                  style: TextStyle(
+                    color: _textMain,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  completed
+                      ? "Meta batida! Excelente treino hoje."
+                      : "${_todayMinutes.toStringAsFixed(1)} min treinados de 15 min.",
+                  style: TextStyle(
+                    color: completed ? const Color(0xFF3FB37F) : _textSoft,
+                    fontSize: 14,
+                    fontWeight: completed ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Resumo honesto de progresso: acerto recente real (não XP, não "índice").
   Widget _buildProgressSummary() {
     final hasData = _accuracyHistory.isNotEmpty;
@@ -486,14 +587,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           return;
         }
         Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => SentenceTrainingScreen(audiogram: audiogram)));
+            builder: (_) => SentenceHubScreen(audiogram: audiogram)));
       },
       icon: Icons.chat_bubble_outline,
-      iconColor: _textSoft,
-      locked: true,
+      iconColor: _primary,
       title: "Frases do dia a dia",
       subtitle:
-          "Entenda frases inteiras no barulho. Disponível na assinatura.",
+          "Ajude o Seu João a entender frases inteiras no barulho.",
     );
   }
 
@@ -511,14 +611,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // Texto de desbloqueio para cards bloqueados
     String lockSubtitle;
     if (isLocked) {
-      final prevLevel = level - 1;
+      final prevLevel = (level == 3 || level == 4) ? 2 : (level - 1);
       final prevAcc = _levelAccuracies[prevLevel] ?? 0.0;
       if (prevAcc > 0) {
         lockSubtitle =
-            "Acerte 70% no exercício anterior para liberar. Você está com ${prevAcc.toStringAsFixed(0)}%.";
+            "Acerte 70% no \"Distinguir sons\" para liberar. Você está com ${prevAcc.toStringAsFixed(0)}%.";
       } else {
         lockSubtitle =
-            "Acerte 70% no exercício anterior para liberar este treino.";
+            "Acerte 70% no \"Distinguir sons\" para liberar este treino.";
       }
     } else {
       lockSubtitle = subtitle;
@@ -557,7 +657,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   void _showLockedExplanation(BuildContext context, int level) {
-    final prevLevel = level - 1;
+    final prevLevel = (level == 3 || level == 4) ? 2 : (level - 1);
     final prevAcc = _levelAccuracies[prevLevel] ?? 0.0;
     final prevName = prevLevel == 2
         ? "Distinguir sons"

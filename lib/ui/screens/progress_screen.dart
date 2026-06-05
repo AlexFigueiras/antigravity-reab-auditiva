@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../models/rehab_session.dart';
 import '../../services/supabase_service.dart';
+import 'outcome_test_screen.dart';
 
 /// Tela de evolução do usuário — visual rico com cards por módulo,
 /// paleta consistente com a Home, sem verde fosforescente.
@@ -33,6 +34,9 @@ class _ProgressScreenState extends State<ProgressScreen>
   double _overallAccuracy = 0;
   Map<int, int> _sessionCounts = {};
   Map<int, double> _levelAccuracies = {};
+  List<Map<String, dynamic>> _outcomeHistory = [];
+  double? _latestOutcomeSrt;
+  double? _baselineOutcomeSrt;
 
   late AnimationController _animController;
 
@@ -54,9 +58,10 @@ class _ProgressScreenState extends State<ProgressScreen>
 
   Future<void> _load() async {
     final history = await _supabase.getAccuracyHistory();
-    final sessions = await _supabase.getAllSessions();
+    final List<RehabSession> sessions = await _supabase.getAllSessions();
     final streak = await _supabase.getTrainingStreak();
     final sessionCounts = await _supabase.getSessionCountsByLevel();
+    final outcomeHistory = await _supabase.getOutcomeTestHistory();
 
     // Agrega erros por par a partir dos logs das sessões.
     final Map<String, int> errorsByPair = {};
@@ -109,6 +114,14 @@ class _ProgressScreenState extends State<ProgressScreen>
         _overallAccuracy = accCount > 0 ? totalAcc / accCount : 0;
         _sessionCounts = sessionCounts;
         _levelAccuracies = levelAccs;
+        _outcomeHistory = outcomeHistory;
+        if (outcomeHistory.isNotEmpty) {
+          _latestOutcomeSrt = (outcomeHistory.last['srt_db'] as num).toDouble();
+          _baselineOutcomeSrt = (outcomeHistory.first['srt_db'] as num).toDouble();
+        } else {
+          _latestOutcomeSrt = null;
+          _baselineOutcomeSrt = null;
+        }
         _loading = false;
       });
       _animController.forward();
@@ -137,12 +150,13 @@ class _ProgressScreenState extends State<ProgressScreen>
   Widget _buildBody() {
     final hasData = _accuracyHistory.isNotEmpty ||
         _hardestPairs.isNotEmpty ||
-        _latestSrt != null;
+        _latestSrt != null ||
+        _outcomeHistory.isNotEmpty;
 
     if (!hasData) {
       return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(40),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -155,6 +169,8 @@ class _ProgressScreenState extends State<ProgressScreen>
                 style:
                     TextStyle(color: _textSoft, fontSize: 18, height: 1.4),
               ),
+              const SizedBox(height: 28),
+              _buildOutcomeTestCard(),
             ],
           ),
         ),
@@ -168,6 +184,10 @@ class _ProgressScreenState extends State<ProgressScreen>
         children: [
           // Painel de resumo animado
           _buildSummaryPanel(),
+          const SizedBox(height: 24),
+
+          // Teste de desfecho independente (Matrix)
+          _buildOutcomeTestCard(),
           const SizedBox(height: 24),
 
           // Cards por módulo
@@ -615,6 +635,320 @@ class _ProgressScreenState extends State<ProgressScreen>
           ),
         );
       }).toList(),
+    );
+  }
+  Widget _buildDeltaWidget() {
+    if (_baselineOutcomeSrt == null || _latestOutcomeSrt == null) {
+      return const SizedBox.shrink();
+    }
+    final double diff = _baselineOutcomeSrt! - _latestOutcomeSrt!;
+
+    if (diff > 0) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.arrow_downward, color: _correct, size: 20),
+          const SizedBox(width: 4),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                "Melhorou ${diff.toStringAsFixed(1)} dB",
+                style: const TextStyle(
+                  color: _correct,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+              const Text(
+                "desde o início",
+                style: TextStyle(color: _textSoft, fontSize: 11),
+              ),
+            ],
+          ),
+        ],
+      );
+    } else if (diff == 0) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            "Sem alteração",
+            style: TextStyle(
+              color: _textSoft,
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+          const Text(
+            "desde o início",
+            style: TextStyle(color: _textSoft, fontSize: 11),
+          ),
+        ],
+      );
+    } else {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.arrow_upward, color: _warn, size: 20),
+          const SizedBox(width: 4),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                "+${(-diff).toStringAsFixed(1)} dB",
+                style: const TextStyle(
+                  color: _warn,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+              const Text(
+                "desde o início",
+                style: TextStyle(color: _textSoft, fontSize: 11),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+  }
+
+  Widget _buildOutcomeChart() {
+    if (_outcomeHistory.length < 2) {
+      return Container(
+        height: 100,
+        alignment: Alignment.center,
+        child: Text(
+          "Realize mais testes para ver a evolução.",
+          style: TextStyle(color: _textSoft, fontSize: 13),
+        ),
+      );
+    }
+
+    final spots = _outcomeHistory.asMap().entries.map((e) {
+      final srt = (e.value['srt_db'] as num?)?.toDouble() ?? 0.0;
+      return FlSpot(e.key.toDouble(), srt);
+    }).toList();
+
+    double minY = spots.map((s) => s.y).reduce((a, b) => a < b ? a : b) - 2.0;
+    double maxY = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b) + 2.0;
+
+    if (minY > -2) minY = -2;
+    if (maxY < 10) maxY = 10;
+
+    return Container(
+      height: 150,
+      padding: const EdgeInsets.only(top: 10, right: 10, bottom: 5),
+      child: LineChart(
+        LineChartData(
+          gridData: FlGridData(
+            show: true,
+            drawVerticalLine: false,
+            horizontalInterval: 4,
+            getDrawingHorizontalLine: (value) => FlLine(
+              color: Colors.white10,
+              strokeWidth: 1,
+            ),
+          ),
+          titlesData: FlTitlesData(
+            show: true,
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 44,
+                getTitlesWidget: (v, _) => Text(
+                  '${v.toStringAsFixed(0)} dB',
+                  style: TextStyle(color: _textSoft, fontSize: 10),
+                ),
+              ),
+            ),
+            bottomTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            topTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            rightTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+          ),
+          borderData: FlBorderData(show: false),
+          minX: 0,
+          maxX: (spots.length - 1).toDouble().clamp(1, double.infinity),
+          minY: minY,
+          maxY: maxY,
+          lineBarsData: [
+            LineChartBarData(
+              spots: spots,
+              isCurved: true,
+              color: _primary,
+              barWidth: 3,
+              isStrokeCapRound: true,
+              dotData: FlDotData(
+                show: true,
+                getDotPainter: (spot, _, __, ___) => FlDotCirclePainter(
+                  radius: 4,
+                  color: _primary,
+                  strokeWidth: 2,
+                  strokeColor: _bg,
+                ),
+              ),
+              belowBarData: BarAreaData(
+                show: true,
+                color: _primary.withValues(alpha: 0.08),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOutcomeTestCard() {
+    final hasHistory = _outcomeHistory.isNotEmpty;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _card,
+        border: Border.all(color: _primary.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.assessment, color: _primary, size: 22),
+                  const SizedBox(width: 10),
+                  const Text(
+                    "Teste de Fala no Ruído",
+                    style: TextStyle(
+                      color: _textMain,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              if (hasHistory)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    "Matrix",
+                    style: TextStyle(
+                      color: _primary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (!hasHistory) ...[
+            const Text(
+              "Avalie sua capacidade de compreender falas no barulho de forma independente dos treinos (Matrix).",
+              style: TextStyle(color: _textSoft, fontSize: 14, height: 1.45),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _primary,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const OutcomeTestScreen(),
+                    ),
+                  );
+                  _load(); // recarrega os dados ao voltar
+                },
+                child: const Text("Fazer Teste de Desfecho",
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+              ),
+            ),
+          ] else ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Limiar de Fala (SRT)",
+                      style: TextStyle(color: _textSoft, fontSize: 12),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "${_latestOutcomeSrt!.toStringAsFixed(1)} dB SNR",
+                      style: const TextStyle(
+                        color: _primary,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                _buildDeltaWidget(),
+              ],
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              "Evolução do Limiar (Menos dB = Melhor)",
+              style: TextStyle(
+                color: _textMain,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _buildOutcomeChart(),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: _primary.withValues(alpha: 0.5)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const OutcomeTestScreen(),
+                    ),
+                  );
+                  _load();
+                },
+                child: const Text(
+                  "Refazer Teste de Desfecho",
+                  style: TextStyle(
+                    color: _primary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

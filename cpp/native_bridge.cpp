@@ -96,10 +96,54 @@ void set_noise_intensity(EngineContext* ctx, float intensity) {
 #endif
 }
 
+// EQ clínico por banda (regra de meia-perda, individualizado pelo audiograma).
+// `gains` = ganhos em dB por banda (1k/2k/4k/6k/8k). Tudo 0 = modo "com aparelho".
+NATIVE_EXPORT
+void set_eq_band_gains(EngineContext* ctx, float* gains, int32_t n) {
+#ifdef __ANDROID__
+    if (ctx && ctx->engine) ctx->engine->setEqBandGains(gains, n);
+#endif
+}
+
+NATIVE_EXPORT
+void set_ambience_sample(EngineContext* ctx, float* data, int32_t len, float vol) {
+#ifdef __ANDROID__
+    if (ctx && ctx->engine) ctx->engine->setAmbienceSample(data, len, vol);
+#endif
+}
+
+NATIVE_EXPORT
+void set_ambience_volume(EngineContext* ctx, float vol) {
+#ifdef __ANDROID__
+    if (ctx && ctx->engine) ctx->engine->setAmbienceVolume(vol);
+#endif
+}
+
+NATIVE_EXPORT
+void stop_ambience(EngineContext* ctx) {
+#ifdef __ANDROID__
+    if (ctx && ctx->engine) ctx->engine->stopAmbience();
+#endif
+}
+
 NATIVE_EXPORT
 void set_target_panning(EngineContext* ctx, float panning) {
 #ifdef __ANDROID__
     if (ctx && ctx->engine) ctx->engine->setTargetPanning(panning);
+#endif
+}
+
+NATIVE_EXPORT
+void set_target_azimuth(EngineContext* ctx, float azimuth) {
+#ifdef __ANDROID__
+    if (ctx && ctx->engine) ctx->engine->setTargetAzimuth(azimuth);
+#endif
+}
+
+NATIVE_EXPORT
+void set_noise_azimuth(EngineContext* ctx, float azimuth) {
+#ifdef __ANDROID__
+    if (ctx && ctx->engine) ctx->engine->setNoiseAzimuth(azimuth);
 #endif
 }
 

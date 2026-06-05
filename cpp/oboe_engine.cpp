@@ -1,5 +1,7 @@
 #include "oboe_engine.h"
 #include <iostream>
+#include <cmath>
+#include <algorithm>
 
 #if defined(__x86_64__) || defined(__i386__)
 #include <xmmintrin.h>
@@ -53,7 +55,12 @@ bool OboeEngine::start() {
     outputStream->setBufferSizeInFrames(outputStream->getFramesPerBurst() * 2);
 
     result = outputStream->requestStart();
-    return result == oboe::Result::OK;
+    bool ok = (result == oboe::Result::OK);
+    // Stream (re)aberto com sucesso: limpa a flag de desconexão. Sem isto, após
+    // uma troca de rota de áudio (fone, Bluetooth, fim de chamada) a flag ficava
+    // presa em true e o Dart entraria em loop de restart. Ver SYSTEM.md §8.
+    if (ok) deviceDisconnected.store(false, std::memory_order_release);
+    return ok;
 }
 
 void OboeEngine::stop() {
@@ -98,11 +105,11 @@ oboe::DataCallbackResult OboeEngine::onAudioReady(
     // Evita overflow de buffer em streams mono e mantém o roteamento L/R correto.
     const int channelCount = oboeStream->getChannelCount();
 
-    // MIXER NATIVO (Zero Latency Synthesis)
     float panningValue = targetPanning.load();
-    float leftGain = (panningValue <= 0.0f) ? 1.0f : (1.0f - panningValue);
-    float rightGain = (panningValue >= 0.0f) ? 1.0f : (1.0f + panningValue);
+    float panLeftGain = (panningValue <= 0.0f) ? 1.0f : (1.0f - panningValue);
+    float panRightGain = (panningValue >= 0.0f) ? 1.0f : (1.0f + panningValue);
 
+    // MIXER NATIVO (Zero Latency Synthesis)
     for(int i = 0; i < numFrames; i++) {
         float monoTarget = targetPlayer.getNextSample();
 
@@ -116,24 +123,101 @@ oboe::DataCallbackResult OboeEngine::onAudioReady(
 
         float monoNoise = noisePlayer.getNextSample();
         float monoWhite = whiteNoiseGenerator.getNextSample();
+        float monoAmbience = ambiencePlayer.getNextSample();
+
+        // Armazena no buffer de delay de target
+        targetDelayBufferL[targetDelayWriteIdxL] = monoTarget;
+        targetDelayBufferR[targetDelayWriteIdxR] = monoTarget;
+
+        float targetL = monoTarget;
+        float targetR = monoTarget;
+
+        float targetAngle = targetAzimuth.load();
+        int targetDelay = static_cast<int>(std::round(31.0f * std::abs(targetAngle) / 90.0f));
+        if (targetDelay < 0) targetDelay = 0;
+        if (targetDelay > 31) targetDelay = 31;
+
+        if (targetAngle > 0.0f) {
+            // Som na direita -> atrasa orelha esquerda
+            int readIdxL = (targetDelayWriteIdxL - targetDelay + 64) % 64;
+            targetL = targetDelayBufferL[readIdxL];
+        } else if (targetAngle < 0.0f) {
+            // Som na esquerda -> atrasa orelha direita
+            int readIdxR = (targetDelayWriteIdxR - targetDelay + 64) % 64;
+            targetR = targetDelayBufferR[readIdxR];
+        }
+
+        float targetLeftGain = 1.0f;
+        float targetRightGain = 1.0f;
+        if (targetAngle >= 0.0f) {
+            targetLeftGain = 1.0f - 0.6f * (targetAngle / 90.0f);
+        } else {
+            targetRightGain = 1.0f - 0.6f * (std::abs(targetAngle) / 90.0f);
+        }
+        targetLeftGain = std::max(0.0f, std::min(1.0f, targetLeftGain));
+        targetRightGain = std::max(0.0f, std::min(1.0f, targetRightGain));
+
+        // Armazena no buffer de delay de noise
+        float combinedNoise = monoNoise + monoWhite + monoAmbience;
+        noiseDelayBufferL[noiseDelayWriteIdxL] = combinedNoise;
+        noiseDelayBufferR[noiseDelayWriteIdxR] = combinedNoise;
+
+        float noiseL = combinedNoise;
+        float noiseR = combinedNoise;
+
+        float noiseAngle = noiseAzimuth.load();
+        int noiseDelay = static_cast<int>(std::round(31.0f * std::abs(noiseAngle) / 90.0f));
+        if (noiseDelay < 0) noiseDelay = 0;
+        if (noiseDelay > 31) noiseDelay = 31;
+
+        if (noiseAngle > 0.0f) {
+            // Som na direita -> atrasa orelha esquerda
+            int readIdxL = (noiseDelayWriteIdxL - noiseDelay + 64) % 64;
+            noiseL = noiseDelayBufferL[readIdxL];
+        } else if (noiseAngle < 0.0f) {
+            // Som na esquerda -> atrasa orelha direita
+            int readIdxR = (noiseDelayWriteIdxR - noiseDelay + 64) % 64;
+            noiseR = noiseDelayBufferR[readIdxR];
+        }
+
+        float noiseLeftGain = 1.0f;
+        float noiseRightGain = 1.0f;
+        if (noiseAngle >= 0.0f) {
+            noiseLeftGain = 1.0f - 0.6f * (noiseAngle / 90.0f);
+        } else {
+            noiseRightGain = 1.0f - 0.6f * (std::abs(noiseAngle) / 90.0f);
+        }
+        noiseLeftGain = std::max(0.0f, std::min(1.0f, noiseLeftGain));
+        noiseRightGain = std::max(0.0f, std::min(1.0f, noiseRightGain));
 
         for(int ch = 0; ch < channelCount; ch++) {
             float mixedSample = 0.0f;
-            // ch 0 = esquerdo, 1 = direito. Em mono (1 canal) o gain é 1.0.
-            float gain = (channelCount < 2) ? 1.0f : ((ch == 0) ? leftGain : rightGain);
 
             // 1. Testa tom puro (Lateralizado via Oscillador)
             mixedSample += testOscillator.getNextSample(ch);
 
-            // 2. Canal de Estimulação Espacializada (Binaural Panning)
-            mixedSample += monoTarget * gain;
-
-            // 3. Canais de Ruído (Centrados para Mascaramento)
-            mixedSample += monoNoise;
-            mixedSample += monoWhite;
+            // 2. Target e Noise com ITD/ILD
+            if (channelCount < 2) {
+                mixedSample += monoTarget;
+                mixedSample += combinedNoise;
+            } else {
+                if (ch == 0) {
+                    mixedSample += targetL * targetLeftGain * panLeftGain;
+                    mixedSample += noiseL * noiseLeftGain;
+                } else {
+                    mixedSample += targetR * targetRightGain * panRightGain;
+                    mixedSample += noiseR * noiseRightGain;
+                }
+            }
 
             floatData[i * channelCount + ch] = mixedSample;
         }
+
+        targetDelayWriteIdxL = (targetDelayWriteIdxL + 1) % 64;
+        targetDelayWriteIdxR = (targetDelayWriteIdxR + 1) % 64;
+        noiseDelayWriteIdxL = (noiseDelayWriteIdxL + 1) % 64;
+        noiseDelayWriteIdxR = (noiseDelayWriteIdxR + 1) % 64;
+
         testOscillator.updatePhase();
     }
 

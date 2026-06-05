@@ -4,12 +4,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/event_buffer.dart';
 import '../services/audio_service_manager.dart';
 
-/// CONTROLADOR DE ACUIDADE ESPACIAL [ESCALONAMENTO-N3]
-/// Gerencia a lógica de localização binaural e tracking de erro angular.
+/// Controlador do treino "De que lado" (Nível 3 — atenção espacial).
+/// Gerencia a lógica de localização binaural e o acompanhamento do erro angular.
 class SpatialController extends ChangeNotifier {
   int _consecutiveHits = 0;
   double _lastAngularError = 0.0;
-  String _statusMessage = "SISTEMA DE RADAR ATIVO";
+  String _statusMessage = "Ouvindo de qual lado...";
 
   int get consecutiveHits => _consecutiveHits;
   double get lastAngularError => _lastAngularError;
@@ -27,7 +27,7 @@ class SpatialController extends ChangeNotifier {
 
     if (isCorrect) {
       _consecutiveHits++;
-      _statusMessage = "ALVO LOCALIZADO: PRECISÃO ALTA";
+      _statusMessage = "Isso! Você acertou o lado.";
       HapticFeedback.lightImpact();
       
       // Feedback de Voz a cada 5 acertos
@@ -37,7 +37,7 @@ class SpatialController extends ChangeNotifier {
       }
     } else {
       _consecutiveHits = 0;
-      _statusMessage = "DESVIO DE ROTA DETECTADO - RECALIBRANDO...";
+      _statusMessage = "Quase. Era do outro lado.";
       HapticFeedback.vibrate(); // Alerta tátil de erro
     }
 
@@ -94,7 +94,7 @@ class SpatialController extends ChangeNotifier {
   }
 
   Future<void> _triggerClinicalVoiceReport() async {
-    const report = "SISTEMA DE LOCALIZAÇÃO CALIBRADO - ACUIDADE ESPACIAL EM 98%";
+    const report = "Muito bem! Você está acertando o lado certo.";
     await AudioServiceManager().engine.playPhonemicStimulus(
       text: report,
       freqBand: 1000.0, // Voz neutra
@@ -102,7 +102,7 @@ class SpatialController extends ChangeNotifier {
   }
 
   void resetStatus() {
-    _statusMessage = "SISTEMA DE RADAR ATIVO";
+    _statusMessage = "Ouvindo de qual lado...";
     notifyListeners();
   }
 }

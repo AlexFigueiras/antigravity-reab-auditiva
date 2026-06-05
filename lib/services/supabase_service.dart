@@ -286,4 +286,58 @@ class SupabaseService {
       return {};
     }
   }
+
+  /// Salva um teste de desfecho independente (Matrix) [Fase 0.2]
+  Future<void> saveOutcomeTest({
+    required double srtDb,
+    required int totalTrials,
+    required int correctAnswers,
+    Map<String, dynamic>? metadata,
+  }) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) throw Exception("Usuário não autenticado.");
+
+    await Supabase.instance.client.from('outcome_tests').insert({
+      'user_id': user.id,
+      'srt_db': srtDb,
+      'total_trials': totalTrials,
+      'correct_answers': correctAnswers,
+      'metadata': metadata,
+      'date': DateTime.now().toIso8601String(),
+    });
+  }
+
+  /// Recupera o teste de desfecho mais recente do usuário
+  Future<Map<String, dynamic>?> getLatestOutcomeTest() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return null;
+    try {
+      final response = await Supabase.instance.client
+          .from('outcome_tests')
+          .select()
+          .eq('user_id', user.id)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      return response;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Recupera o histórico de testes de desfecho do usuário
+  Future<List<Map<String, dynamic>>> getOutcomeTestHistory() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return [];
+    try {
+      final List<dynamic> response = await Supabase.instance.client
+          .from('outcome_tests')
+          .select()
+          .eq('user_id', user.id)
+          .order('date', ascending: true);
+      return response.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
 }

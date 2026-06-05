@@ -2,17 +2,19 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
-/// PDF SERVICE: Geração de Relatórios Clínicos Industriais [SEGURANÇA]
+/// Gera um relatório em PDF do progresso da pessoa na reabilitação auditiva.
+/// Linguagem humana (sem XP/jargão), mas com um aviso clínico honesto — pode ser
+/// mostrado ao próprio usuário, a um familiar ou ao fonoaudiólogo.
 class PdfService {
   static Future<void> exportClinicalReport({
-    required String acuityLevel,
-    required int totalXP,
+    /// Como a pessoa está indo, em palavras ("Iniciante", "Intermediário"…).
+    required String progressLevel,
+    /// Pior nível de ruído já vencido com bom acerto (SNR em dB; menor = mais difícil).
     required double noiseThreshold,
-    required int sessionXP,
   }) async {
     final pdf = pw.Document();
-    
-    // Mock de dados históricos de 7 dias para o gráfico [IAB EVOLUTION]
+
+    // Dados históricos de 7 dias para o gráfico de evolução (exemplo).
     final chartData = [
       pw.LineDataSet(
         drawSurface: true,
@@ -32,45 +34,43 @@ class PdfService {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              // Header Industrial
+              // Cabeçalho
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  pw.Text("RELATÓRIO CLÍNICO - BOSYN", 
+                  pw.Text("Seu progresso na audição",
                     style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: PdfColors.blue900)),
-                  pw.Text("ID: ${DateTime.now().millisecondsSinceEpoch}", 
+                  pw.Text("BOSYN",
                     style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey)),
                 ],
               ),
               pw.Divider(thickness: 2),
               pw.SizedBox(height: 20),
 
-              // Tabela de Métricas
+              // Resumo em linguagem simples
               pw.TableHelper.fromTextArray(
                 headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),
                 headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey900),
                 cellAlignment: pw.Alignment.centerLeft,
-                headers: ['MÉTRICA', 'VALOR'],
+                headers: ['O quê', 'Como está'],
                 data: [
-                  ['DATA DE REFERÊNCIA', DateTime.now().toString().split('.')[0]],
-                  ['ESTADO DO PACIENTE (IAB)', acuityLevel],
-                  ['XP ACUMULADO (TOTAL)', totalXP.toString()],
-                  ['XP DE SESSÃO', '+$sessionXP'],
-                  ['LIMIAR DE RUÍDO (SNR)', '$noiseThreshold dB'],
+                  ['Data deste relatório', DateTime.now().toString().split(' ')[0]],
+                  ['Como você está indo', progressLevel],
+                  ['Já consegue entender com barulho até', '$noiseThreshold dB de ruído'],
                 ],
               ),
 
               pw.SizedBox(height: 30),
 
-              // Gráfico de Evolução
-              pw.Text("EVOLUÇÃO DO ÍNDICE DE ACUIDADE (ÚLTIMOS 7 DIAS)", 
+              // Gráfico de evolução
+              pw.Text("Como você foi melhorando (últimos 7 dias)",
                 style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: PdfColors.blueGrey)),
               pw.SizedBox(height: 10),
               pw.Container(
                 height: 150,
                 child: pw.Chart(
                   grid: pw.CartesianGrid(
-                    xAxis: pw.FixedAxis([0, 1, 2, 3, 4, 5, 6], buildLabel: (v) => pw.Text("D${v.toInt()+1}")),
+                    xAxis: pw.FixedAxis([0, 1, 2, 3, 4, 5, 6], buildLabel: (v) => pw.Text("Dia ${v.toInt()+1}")),
                     yAxis: pw.FixedAxis([0, 25, 50, 75, 100], buildLabel: (v) => pw.Text("${v.toInt()}%")),
                   ),
                   datasets: chartData,
@@ -78,31 +78,31 @@ class PdfService {
               ),
 
               pw.SizedBox(height: 20),
-              
-              // Métricas de Alta Frequência
-              pw.Text("ANÁLISE DE DISCRIMINAÇÃO SIBILANTE", 
+
+              // Destaques em frases claras
+              pw.Text("O que você vem conseguindo",
                 style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
               pw.SizedBox(height: 10),
-              pw.Bullet(text: "Disponibilidade de Ganho: OK (Safe Level)"),
-              pw.Bullet(text: "Taxa de Acerto em Alta Frequência: 88%"),
-              pw.Bullet(text: "Progressão de SNR: DINAMISMO ATIVO"),
+              pw.Bullet(text: "O som está chegando no volume certo para você."),
+              pw.Bullet(text: "Você está acertando bem os sons mais agudos (como S e F)."),
+              pw.Bullet(text: "Aos poucos, está entendendo melhor mesmo com barulho de fundo."),
 
               pw.Spacer(),
 
-              // Rodapé Legal [COMPLIANCE FDA]
+              // Aviso clínico honesto
               pw.Divider(),
               pw.Text(
-                "DISCLAIMER LEGAL: Este documento é um suporte tecnológico à decisão clínica "
-                "e destina-se apenas a profissionais de saúde e usuários em reabilitação auditiva. "
-                "Os dados apresentados não substituem o diagnóstico médico otorrinolaringológico "
-                "ou a avaliação fonoaudiológica em cabine acústica.",
+                "Este relatório mostra como você vem treinando e serve de apoio. "
+                "Ele não substitui a consulta com o médico otorrinolaringologista "
+                "nem a avaliação do fonoaudiólogo em cabine. Em caso de dúvida sobre "
+                "sua audição, procure um profissional de saúde.",
                 style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
                 textAlign: pw.TextAlign.justify,
               ),
               pw.SizedBox(height: 5),
               pw.Align(
                 alignment: pw.Alignment.centerRight,
-                child: pw.Text("BOSYN NEURAL ENGINE v1.0.0", 
+                child: pw.Text("BOSYN",
                   style: const pw.TextStyle(fontSize: 6, color: PdfColors.grey)),
               ),
             ],
@@ -111,10 +111,10 @@ class PdfService {
       ),
     );
 
-    // Dispara a visualização/impressão
+    // Abre a visualização/impressão do PDF.
     await Printing.layoutPdf(
       onLayout: (PdfPageFormat format) async => pdf.save(),
-      name: 'Relatorio_BOSYN_${DateTime.now().day}.pdf',
+      name: 'Meu_progresso_BOSYN_${DateTime.now().day}.pdf',
     );
   }
 }

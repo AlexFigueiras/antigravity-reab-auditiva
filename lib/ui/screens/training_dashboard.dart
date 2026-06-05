@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../core/adaptive_staircase.dart';
 import '../../core/gamification_controller.dart';
+import '../../core/listening_mode.dart';
 import '../../core/phoneme_map.dart';
 import '../../core/spatial_controller.dart';
 import '../../models/rehab_session.dart';
 import '../../services/audio_service_manager.dart';
 import '../../services/gatekeeper_service.dart';
+import '../../services/listening_mode_service.dart';
 import '../../services/supabase_service.dart';
+import '../widgets/listening_mode_banner.dart';
 import 'mission_report_screen.dart';
 import 'dart:math' as math;
 
@@ -37,14 +41,50 @@ class _TrainingDashboardState extends State<TrainingDashboard>
   Map<String, dynamic>? _currentStimulus;
   double _extraBoost = 0.0;
   double _targetPanning = 0.0;
+  // Ambiente de ruído do nível 4 (Restaurante/Trânsito/Vento). Sorteado uma vez
+  // por estímulo e reusado no "Ouvir de novo", para a repetição ser fiel.
+  String _currentEnvironment = 'RESTAURANTE';
   List<Map<String, dynamic>> _audiogramData = [];
   bool _audiogramLoading = true;
+
+  // Condição de escuta (com/sem aparelho). O usuário precisa CONFIRMAR a condição
+  // antes de começar — para treinar igual ao teste e evitar empilhar ganho. (0.4)
+  ListeningMode _listeningMode = ListeningMode.unaided;
+  bool _conditionConfirmed = false;
+
+  // N4: staircase 2-down/1-up (converge ~70,7% de acerto).
+  // SNR: +10 dB (fácil) → 0 dB (fala = ruído). Ruído fixo, fala desce/sobe.
+  // Passo de 2 dB down / 3 dB up (assimetria clínica: subir rápido para não
+  // frustrar o idoso, descer devagar para manter desafio).
+  final _n4Staircase = AdaptiveStaircase(
+    start: 10.0,
+    floor: 0.0,
+    ceiling: 10.0,
+    stepDown: 2.0,
+    stepUp: 3.0,
+    minReversalsForEstimate: 6,
+  );
+
+  // N2: staircase para nível de dificuldade (1 a 5).
+  // 1 (mais fácil - bilabiais/vogais) a 5 (mais difícil - sibilantes).
+  // stepDown: 1.0 (fica mais difícil, V desce para 1.0, ou seja, dificuldade 6 - V sobe para 5).
+  // stepUp: 1.0 (fica mais fácil, V sobe para 5.0, ou seja, dificuldade 6 - V desce para 1).
+  final _n2Staircase = AdaptiveStaircase(
+    start: 3.0,
+    floor: 1.0,
+    ceiling: 5.0,
+    stepDown: 1.0,
+    stepUp: 1.0,
+    minReversalsForEstimate: 4,
+  );
 
   // Rastreio da sessão (métricas reais — sem XP/pontos fake)
   int _totalTrials = 0;
   int _correctAnswers = 0;
   final List<Map<String, dynamic>> _sessionLog = [];
   final Stopwatch _trialStopwatch = Stopwatch();
+  bool _isRepeatTrial = false;
+  DateTime? _sessionStart;
 
   // Embaralha qual botão (esquerda/direita) recebe o alvo, para o usuário
   // não decorar a posição. Recalculado a cada novo estímulo.
@@ -55,6 +95,7 @@ class _TrainingDashboardState extends State<TrainingDashboard>
 
   // Animação de feedback
   late AnimationController _feedbackAnim;
+  List<String> _n2Choices = [];
 
   @override
   void initState() {
@@ -64,6 +105,12 @@ class _TrainingDashboardState extends State<TrainingDashboard>
       duration: const Duration(milliseconds: 400),
     );
     _loadAudiogram();
+    _loadListeningMode();
+  }
+
+  Future<void> _loadListeningMode() async {
+    final m = await ListeningModeService().load();
+    if (mounted) setState(() => _listeningMode = m);
   }
 
   Future<void> _loadAudiogram() async {
@@ -132,13 +179,19 @@ class _TrainingDashboardState extends State<TrainingDashboard>
   // ---------------------------------------------------------------------------
 
   void _startExercise() {
+    _sessionStart = DateTime.now();
+    _totalTrials = 0;
+    _correctAnswers = 0;
+    _sessionLog.clear();
     _trialStopwatch.reset();
+    _isRepeatTrial = false;
     if (widget.level == 2) {
+      _n2Staircase.reset();
       _startLevel2();
     } else if (widget.level == 3) {
       _startLevel3();
     } else {
-      _startLevel4();
+      _startLevel4(newSession: true);
     }
   }
 
@@ -148,8 +201,10 @@ class _TrainingDashboardState extends State<TrainingDashboard>
   }
 
   void _startLevel2() {
+    _isRepeatTrial = false;
     final controller = context.read<GamificationController>();
-    final phoneme = controller.getSmartPhoneme(_audiogramData);
+    final targetDifficulty = 6 - _n2Staircase.current.round();
+    final phoneme = controller.getSmartPhoneme(_audiogramData, targetDifficulty: targetDifficulty);
 
     // Sem audiograma não há personalização — não treinamos "às cegas".
     if (phoneme == null) {
@@ -157,8 +212,52 @@ class _TrainingDashboardState extends State<TrainingDashboard>
       return;
     }
 
+    // Embaralha quem é target e quem é distractor a cada rodada, para que
+    // o mesmo par possa aparecer com qualquer uma das duas palavras como alvo.
+    final Map<String, dynamic> stimulus;
+    if (math.Random().nextBool()) {
+      stimulus = {
+        ...phoneme,
+        'target': phoneme['distractor'],
+        'distractor': phoneme['target'],
+      };
+    } else {
+      stimulus = phoneme;
+    }
+
+    final target = stimulus['target'] as String;
+    final mainDistractor = stimulus['distractor'] as String;
+
+    final List<Map<String, dynamic>> level2Stimuli =
+        List<Map<String, dynamic>>.from(PHONEME_REHAB_DATA['level_2']);
+    
+    final band = stimulus['freq_band'] as int;
+    final candidates = level2Stimuli
+        .where((s) => s['freq_band'] == band)
+        .expand((s) => [s['target'] as String, s['distractor'] as String])
+        .where((w) => w.toLowerCase() != target.toLowerCase() && w.toLowerCase() != mainDistractor.toLowerCase())
+        .toSet()
+        .toList();
+
+    if (candidates.length < 2) {
+      final allWords = level2Stimuli
+          .expand((s) => [s['target'] as String, s['distractor'] as String])
+          .where((w) => w.toLowerCase() != target.toLowerCase() && w.toLowerCase() != mainDistractor.toLowerCase())
+          .toSet()
+          .toList();
+      candidates.addAll(allWords);
+    }
+
+    candidates.shuffle();
+    final distractor2 = candidates[0];
+    final distractor3 = candidates[1];
+
+    final choices = [target, mainDistractor, distractor2, distractor3];
+    choices.shuffle();
+
     setState(() {
-      _currentStimulus = phoneme;
+      _currentStimulus = stimulus;
+      _n2Choices = choices;
       _isTrainingActive = true;
       _extraBoost = 0.0;
       _targetPanning = 0.0;
@@ -182,7 +281,7 @@ class _TrainingDashboardState extends State<TrainingDashboard>
     );
   }
 
-  void _startLevel4() {
+  void _startLevel4({bool newSession = false}) {
     final controller = context.read<GamificationController>();
     final environments = ['RESTAURANTE', 'TRÂNSITO', 'VENTO'];
 
@@ -192,17 +291,29 @@ class _TrainingDashboardState extends State<TrainingDashboard>
       return;
     }
 
+    // Nova sessão → staircase começa do teto (10 dB, mais fácil), para não
+    // carregar o estado de uma sessão anterior e frustrar o usuário.
+    if (newSession) _n4Staircase.reset();
+
     setState(() {
       _currentStimulus = phoneme;
       _isTrainingActive = true;
+      // Sorteia o ambiente UMA vez por estímulo e guarda, para o "Ouvir de novo"
+      // repetir o mesmo ambiente (e não trocar a cada toque).
+      _currentEnvironment = environments[math.Random().nextInt(3)];
       _newStimulusLayout();
     });
 
     _trialStopwatch.start();
-    AudioServiceManager().engine.playCocktailStimulus(
+    _playLevel4Stimulus();
+  }
+
+  Future<void> _playLevel4Stimulus() async {
+    if (_currentStimulus == null) return;
+    await AudioServiceManager().engine.playCocktailStimulus(
           text: _currentStimulus!['target'],
-          snrDb: controller.currentSNR,
-          noiseEnvironment: environments[math.Random().nextInt(3)],
+          snrDb: _n4Staircase.current,
+          noiseEnvironment: _currentEnvironment,
           freqBand: (_currentStimulus!['freq_band'] as num).toDouble(),
         );
   }
@@ -215,28 +326,39 @@ class _TrainingDashboardState extends State<TrainingDashboard>
     final distractor = _currentStimulus!['distractor'] as String;
     bool isCorrect = choice == target;
 
-    _totalTrials++;
-    if (isCorrect) _correctAnswers++;
-    _sessionLog.add({
-      'pair': '$target / $distractor',
-      'chosen': choice,
-      'correct': isCorrect,
-      'rt_ms': _trialStopwatch.elapsedMilliseconds,
-    });
+    final currentDiff = 6 - _n2Staircase.current.round();
+
+    if (!_isRepeatTrial) {
+      _totalTrials++;
+      if (isCorrect) _correctAnswers++;
+      _n2Staircase.respond(isCorrect);
+      _sessionLog.add({
+        'pair': '$target / $distractor',
+        'chosen': choice,
+        'correct': isCorrect,
+        'rt_ms': _trialStopwatch.elapsedMilliseconds,
+        'difficulty_level': currentDiff,
+      });
+    }
 
     if (isCorrect) {
       _feedbackAnim.forward(from: 0);
       setState(() {
         _feedbackMsg = "Isso! Você ouviu certo.";
         _feedbackPositive = true;
-        controller.addAcuityXP(1.0, [target[0].toLowerCase()]);
+        if (!_isRepeatTrial) {
+          controller.addAcuityXP(1.0, [target[0].toLowerCase()]);
+        }
       });
       Future.delayed(const Duration(milliseconds: 1100), () {
         if (mounted) _startLevel2();
       });
     } else {
-      controller.consumeEnergy();
+      if (!_isRepeatTrial) {
+        controller.consumeEnergy();
+      }
       setState(() {
+        _isRepeatTrial = true;
         _extraBoost += 3.0;
         _feedbackMsg = "Quase. A palavra era \"$target\". Ouça de novo.";
         _feedbackPositive = false;
@@ -245,15 +367,13 @@ class _TrainingDashboardState extends State<TrainingDashboard>
     }
   }
 
-  final List<bool> _level4History = [];
-
   void _handleN4Choice(String choice) {
     if (_currentStimulus == null) return;
     _trialStopwatch.stop();
     final gamification = context.read<GamificationController>();
     final target = _currentStimulus!['target'] as String;
     final distractor = _currentStimulus!['distractor'] as String;
-    bool isCorrect = choice == target;
+    final isCorrect = choice == target;
 
     _totalTrials++;
     if (isCorrect) _correctAnswers++;
@@ -261,21 +381,15 @@ class _TrainingDashboardState extends State<TrainingDashboard>
       'pair': '$target / $distractor',
       'chosen': choice,
       'correct': isCorrect,
+      'snr_db': _n4Staircase.current,
       'rt_ms': _trialStopwatch.elapsedMilliseconds,
     });
 
-    _level4History.add(isCorrect);
-    if (_level4History.length > 5) _level4History.removeAt(0);
-
-    if (_level4History.length == 5) {
-      int successCount = _level4History.where((val) => val).length;
-      if (successCount < 3) {
-        debugPrint("REGRESSÃO CLÍNICA (<50%). Recalibrando.");
-        setState(() {
-          _level4History.clear();
-        });
-      }
-    }
+    // Staircase 2-down/1-up: atualiza SNR ANTES do próximo estímulo.
+    // Acerto → pode descer (mais difícil) após 2 consecutivos.
+    // Erro  → sobe imediatamente (mais fácil), garantindo que o usuário
+    //         não trava no piso como no código anterior.
+    _n4Staircase.respond(isCorrect);
 
     gamification.addAcuityXP(isCorrect ? 1.0 : 0.0, ['cocktail']);
 
@@ -337,7 +451,9 @@ class _TrainingDashboardState extends State<TrainingDashboard>
     } else if (widget.level == 3) {
       await _playLevel3Stimulus();
     } else {
-      _startLevel4();
+      // Nível 4: REPETE o estímulo atual (mesmo par, mesmo ambiente, mesmo SNR).
+      // Antes chamava _startLevel4(), que sorteava um novo par e "avançava".
+      await _playLevel4Stimulus();
     }
   }
 
@@ -387,14 +503,6 @@ class _TrainingDashboardState extends State<TrainingDashboard>
     }
   }
 
-  /// Monta a explicação do som ("o porquê"), derivada do alvo.
-  /// Ex.: alvo "Dedo" -> "Som do D — como em dedo".
-  String _soundExplanation() {
-    final target = (_currentStimulus?['target'] as String?) ?? '';
-    if (target.isEmpty) return '';
-    final letter = target[0].toUpperCase();
-    return "Som do $letter — como em \"${target.toLowerCase()}\".";
-  }
 
   // ---------------------------------------------------------------------------
   // UI
@@ -473,24 +581,27 @@ class _TrainingDashboardState extends State<TrainingDashboard>
   }
 
   Widget _buildStandby() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Icon(Icons.headphones_rounded, color: _textSoft, size: 72),
-        const SizedBox(height: 24),
-        Text(
-          _description,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-              color: _textSoft, fontSize: 18, height: 1.5),
-        ),
-        const SizedBox(height: 16),
-        const Text(
-          "Coloque os fones para começar.",
-          textAlign: TextAlign.center,
-          style: TextStyle(color: _textSoft, fontSize: 15),
-        ),
-      ],
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.headphones_rounded, color: _textSoft, size: 64),
+          const SizedBox(height: 20),
+          Text(
+            _description,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: _textSoft, fontSize: 18, height: 1.5),
+          ),
+          const SizedBox(height: 20),
+          // Instrução da condição de escuta + confirmação ativa (0.4): a pessoa
+          // tem de confirmar que está na mesma condição em que foi testada.
+          ListeningModeBanner(
+            mode: _listeningMode,
+            confirmed: _conditionConfirmed,
+            onConfirmedChanged: (v) => setState(() => _conditionConfirmed = v),
+          ),
+        ],
+      ),
     );
   }
 
@@ -510,61 +621,74 @@ class _TrainingDashboardState extends State<TrainingDashboard>
     final distractor = _currentStimulus!['distractor'] as String;
     final isN4 = widget.level == 4;
 
-    final leftWord = _targetOnLeft ? target : distractor;
-    final rightWord = _targetOnLeft ? distractor : target;
-    final onChoice = isN4 ? _handleN4Choice : _handleN2Choice;
+    if (isN4) {
+      final leftWord = _targetOnLeft ? target : distractor;
+      final rightWord = _targetOnLeft ? distractor : target;
+      final onChoice = _handleN4Choice;
 
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        // Faixa fixa: o "porquê" do treino.
-        _explanationBanner(),
-        const SizedBox(height: 28),
-
-        // Botão "Ouvir de novo" — central, grande.
-        _replayButton(),
-        const SizedBox(height: 16),
-        const Text("Qual palavra você ouviu?",
-            style: TextStyle(color: _textSoft, fontSize: 17)),
-        const SizedBox(height: 20),
-
-        Row(
-          children: [
-            _wordButton(leftWord, () => onChoice(leftWord)),
-            const SizedBox(width: 14),
-            _wordButton(rightWord, () => onChoice(rightWord)),
-          ],
-        ),
-
-        const SizedBox(height: 20),
-        _feedbackArea(),
-      ],
-    );
-  }
-
-  Widget _explanationBanner() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      decoration: BoxDecoration(
-        color: _card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _primary.withValues(alpha: 0.35)),
-      ),
-      child: Row(
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.lightbulb_outline, color: _primary, size: 22),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              _soundExplanation(),
-              style: const TextStyle(
-                  color: _textMain, fontSize: 16, height: 1.35),
-            ),
+          _replayButton(),
+          const SizedBox(height: 16),
+          const Text("Qual palavra você ouviu?",
+              style: TextStyle(color: _textSoft, fontSize: 17)),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              _wordButton(leftWord, () => onChoice(leftWord)),
+              const SizedBox(width: 14),
+              _wordButton(rightWord, () => onChoice(rightWord)),
+            ],
           ),
+          const SizedBox(height: 20),
+          _feedbackArea(),
         ],
-      ),
-    );
+      );
+    } else {
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _replayButton(),
+          const SizedBox(height: 16),
+          const Text("Qual palavra você ouviu?",
+              style: TextStyle(color: _textSoft, fontSize: 17)),
+          const SizedBox(height: 20),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisSpacing: 14,
+            mainAxisSpacing: 14,
+            childAspectRatio: 2.0,
+            children: _n2Choices.map((word) {
+              return InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: () => _handleN2Choice(word),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: _card,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white12, width: 1.5),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    word,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        color: _textMain,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 20),
+          _feedbackArea(),
+        ],
+      );
+    }
   }
 
   Widget _replayButton() {
@@ -727,6 +851,17 @@ class _TrainingDashboardState extends State<TrainingDashboard>
               textAlign: TextAlign.center,
             ),
           ),
+        // Fora do treino, só libera "Começar" depois da confirmação da condição
+        // de escuta (com/sem aparelho) — garante teste e treino na mesma condição.
+        if (!_isTrainingActive && !_conditionConfirmed)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Text(
+              "Confirme a condição acima para começar.",
+              style: TextStyle(color: _textSoft, fontSize: 13),
+              textAlign: TextAlign.center,
+            ),
+          ),
         SizedBox(
           width: double.infinity,
           height: 56,
@@ -737,12 +872,14 @@ class _TrainingDashboardState extends State<TrainingDashboard>
                   : _primary,
               foregroundColor:
                   _isTrainingActive ? _textSoft : Colors.white,
+              disabledBackgroundColor: const Color(0xFF222932),
+              disabledForegroundColor: _textSoft.withValues(alpha: 0.5),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14)),
             ),
-            onPressed: () => _isTrainingActive
-                ? _stopAndReport()
-                : _startExercise(),
+            onPressed: _isTrainingActive
+                ? _stopAndReport
+                : (_conditionConfirmed ? _startExercise : null),
             child: Text(
               _isTrainingActive ? "Encerrar treino" : "Começar o treino",
               style: const TextStyle(
@@ -758,10 +895,11 @@ class _TrainingDashboardState extends State<TrainingDashboard>
     setState(() => _isTrainingActive = false);
     AudioServiceManager().forceStopAll();
 
+    final durationMs = _sessionStart != null
+        ? DateTime.now().difference(_sessionStart!).inMilliseconds
+        : 0;
+
     // Salva sessão real no Supabase (métrica clínica, não XP de videogame)
-    final accuracy = _totalTrials > 0
-        ? (_correctAnswers / _totalTrials * 100)
-        : 0.0;
     final avgRt = _sessionLog.isNotEmpty
         ? _sessionLog
                 .map((e) => (e['rt_ms'] as int?) ?? 0)
@@ -777,7 +915,7 @@ class _TrainingDashboardState extends State<TrainingDashboard>
         orElse: () => RehabLevel.phonemicDiscrimination,
       );
 
-      final gamification = context.read<GamificationController>();
+      if (!mounted) return;
       final session = RehabSession(
         patientId: patientId,
         date: DateTime.now(),
@@ -787,7 +925,11 @@ class _TrainingDashboardState extends State<TrainingDashboard>
         averageResponseTimeMs: avgRt,
         metadata: {
           'log': _sessionLog,
-          if (widget.level == 4) 'srt': gamification.currentSNR,
+          'duration_ms': durationMs,
+          if (widget.level == 4)
+            'srt': _n4Staircase.estimate ?? _n4Staircase.current,
+          if (widget.level == 4)
+            'srt_reversals': _n4Staircase.reversalCount,
         },
       );
       await SupabaseService().saveRehabSession(session);

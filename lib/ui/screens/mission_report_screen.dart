@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'dart:math' as math;
+import 'package:flutter/material.dart';
 
 /// Tela de resultado pós-treino — celebratória e baseada em métricas reais.
 ///
@@ -34,6 +34,27 @@ class _MissionReportScreenState extends State<MissionReportScreen>
   static const _correct = Color(0xFF3FB37F);
   static const _warn = Color(0xFFE6A23C);
 
+  static const List<Map<String, String>> _counselingTips = [
+    {
+      'title': 'Fique de frente para quem fala',
+      'description': 'Olhar diretamente para o rosto da pessoa ajuda seu cérebro a usar a leitura labial para preencher as falhas do som.',
+    },
+    {
+      'title': 'Ajuste seus aparelhos auditivos',
+      'description': 'Antes de começar o treino ou uma conversa importante, certifique-se de que seus aparelhos estão ligados e regulados no volume confortável.',
+    },
+    {
+      'title': 'Peça para falar mais devagar',
+      'description': 'Dizer "fale um pouco mais devagar, por favor" é mais eficiente do que apenas pedir para falar mais alto.',
+    },
+    {
+      'title': 'Reduza os barulhos ao redor',
+      'description': 'Em uma conversa, tente desligar a TV ou se afastar de fontes de ruído para facilitar a compreensão da fala.',
+    },
+  ];
+
+  late final Map<String, String> _selectedTip;
+
   late AnimationController _ringController;
   late AnimationController _fadeController;
   late Animation<double> _ringAnimation;
@@ -45,6 +66,7 @@ class _MissionReportScreenState extends State<MissionReportScreen>
   @override
   void initState() {
     super.initState();
+    _selectedTip = _counselingTips[math.Random().nextInt(_counselingTips.length)];
     _ringController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -186,6 +208,14 @@ class _MissionReportScreenState extends State<MissionReportScreen>
                   child: _buildMostMissed(),
                 ),
 
+              const SizedBox(height: 24),
+
+              // Dica de comunicação (Aconselhamento)
+              FadeTransition(
+                opacity: _fadeAnimation,
+                child: _buildCounselingCard(),
+              ),
+
               const SizedBox(height: 36),
 
               // Botão de voltar
@@ -211,6 +241,69 @@ class _MissionReportScreenState extends State<MissionReportScreen>
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildCounselingCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            _primary.withValues(alpha: 0.15),
+            _card,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _primary.withValues(alpha: 0.25),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.lightbulb_outline_rounded,
+                color: _primary,
+                size: 26,
+              ),
+              const SizedBox(width: 10),
+              Text(
+                "Dica de Comunicação",
+                style: TextStyle(
+                  color: _primary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _selectedTip['title']!,
+            style: const TextStyle(
+              color: _textMain,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _selectedTip['description']!,
+            style: const TextStyle(
+              color: _textSoft,
+              fontSize: 15,
+              height: 1.4,
+            ),
+          ),
+        ],
       ),
     );
   }

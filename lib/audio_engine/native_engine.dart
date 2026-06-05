@@ -103,12 +103,62 @@ class NativeDSPBridge implements ffi.Finalizable {
     func(_enginePtr, intensity);
   }
 
+  /// Envia os ganhos (dB) do EQ clínico por banda (1k/2k/4k/6k/8k), derivados do
+  /// audiograma (regra de meia-perda). Tudo 0 = modo "com aparelho" (EQ desligado).
+  void setEqBandGains(ffi.Pointer<ffi.Float> data, int length) {
+    final func = _lib.lookupFunction<
+        ffi.Void Function(ffi.Pointer<EngineContext>, ffi.Pointer<ffi.Float>, ffi.Int32),
+        void Function(ffi.Pointer<EngineContext>, ffi.Pointer<ffi.Float>, int)
+    >('set_eq_band_gains');
+    func(_enginePtr, data, length);
+  }
+
+  void setAmbienceSample(ffi.Pointer<ffi.Float> data, int length, double volume) {
+    final func = _lib.lookupFunction<
+        ffi.Void Function(ffi.Pointer<EngineContext>, ffi.Pointer<ffi.Float>, ffi.Int32, ffi.Float),
+        void Function(ffi.Pointer<EngineContext>, ffi.Pointer<ffi.Float>, int, double)
+    >('set_ambience_sample');
+    func(_enginePtr, data, length, volume);
+  }
+
+  void setAmbienceVolume(double volume) {
+    final func = _lib.lookupFunction<
+        ffi.Void Function(ffi.Pointer<EngineContext>, ffi.Float),
+        void Function(ffi.Pointer<EngineContext>, double)
+    >('set_ambience_volume');
+    func(_enginePtr, volume);
+  }
+
+  void stopAmbience() {
+    final func = _lib.lookupFunction<
+        ffi.Void Function(ffi.Pointer<EngineContext>),
+        void Function(ffi.Pointer<EngineContext>)
+    >('stop_ambience');
+    func(_enginePtr);
+  }
+
   void setTargetPanning(double panning) {
     final func = _lib.lookupFunction<
         ffi.Void Function(ffi.Pointer<EngineContext>, ffi.Float),
         void Function(ffi.Pointer<EngineContext>, double)
     >('set_target_panning');
     func(_enginePtr, panning);
+  }
+
+  void setTargetAzimuth(double azimuth) {
+    final func = _lib.lookupFunction<
+        ffi.Void Function(ffi.Pointer<EngineContext>, ffi.Float),
+        void Function(ffi.Pointer<EngineContext>, double)
+    >('set_target_azimuth');
+    func(_enginePtr, azimuth);
+  }
+
+  void setNoiseAzimuth(double azimuth) {
+    final func = _lib.lookupFunction<
+        ffi.Void Function(ffi.Pointer<EngineContext>, ffi.Float),
+        void Function(ffi.Pointer<EngineContext>, double)
+    >('set_noise_azimuth');
+    func(_enginePtr, azimuth);
   }
 
   /// Recupera o momento exato que o estímulo sonou na Orelha (nanosegundos)

@@ -3,6 +3,7 @@
 #include "sine_oscillator.h"
 #include "sample_player.h"
 #include "noise_generator.h"
+#include "ambience_looper.h"
 #include <memory>
 #include <chrono>
 #include "dsp_engine.h"
@@ -19,9 +20,23 @@ private:
     SamplePlayer targetPlayer;
     SamplePlayer noisePlayer;
     NoiseGenerator whiteNoiseGenerator;
+    AmbienceLooper ambiencePlayer; // som de fundo do treino de frases (loop)
 
     float sampleRate = 48000.0f;
     std::atomic<float> targetPanning{0.0f}; // -1.0L, 0.0C, 1.0R
+    std::atomic<float> targetAzimuth{0.0f}; // -90 to +90 graus
+    std::atomic<float> noiseAzimuth{0.0f};  // -90 to +90 graus
+
+    // Buffers circulares para delay interaural (ITD)
+    float targetDelayBufferL[64] = {0.0f};
+    float targetDelayBufferR[64] = {0.0f};
+    int targetDelayWriteIdxL = 0;
+    int targetDelayWriteIdxR = 0;
+
+    float noiseDelayBufferL[64] = {0.0f};
+    float noiseDelayBufferR[64] = {0.0f};
+    int noiseDelayWriteIdxL = 0;
+    int noiseDelayWriteIdxR = 0;
 
     // Event Tagging: Timestamp de hardware em nanosegundos para medir latência clínica
     std::atomic<int64_t> stimulusOnsetTimestampNs{0};
@@ -62,6 +77,14 @@ public:
         targetPanning.store(panning);
     }
 
+    void setTargetAzimuth(float azimuth) {
+        targetAzimuth.store(azimuth);
+    }
+
+    void setNoiseAzimuth(float azimuth) {
+        noiseAzimuth.store(azimuth);
+    }
+
     void setNoiseSample(const float* data, int len, float vol, bool loop) {
         noisePlayer.setData(data, len);
         noisePlayer.setVolume(vol);
@@ -70,6 +93,23 @@ public:
 
     void setNoiseIntensity(float intensity) {
         whiteNoiseGenerator.setAmplitude(intensity);
+    }
+
+    // EQ clínico individualizado pelo audiograma (regra de meia-perda). Ganhos
+    // por banda em dB; tudo 0 no modo "com aparelho". Ver dsp_engine / plano 1.1.
+    void setEqBandGains(const float* gainsDb, int n) {
+        dspEngine.setEqBandGains(gainsDb, n);
+    }
+
+    // Ambiência do treino de frases (loop contínuo).
+    void setAmbienceSample(const float* data, int len, float vol) {
+        ambiencePlayer.setData(data, len, vol);
+    }
+    void setAmbienceVolume(float vol) {
+        ambiencePlayer.setVolume(vol);
+    }
+    void stopAmbience() {
+        ambiencePlayer.stop();
     }
 
     // PASSO 2: Event Tagging Clínico

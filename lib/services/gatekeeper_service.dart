@@ -15,6 +15,12 @@ class GatekeeperService {
   factory GatekeeperService() => _instance;
   GatekeeperService._internal();
 
+  /// TEMPORÁRIO: o paywall está DESLIGADO enquanto o Stripe não está
+  /// configurado. Com isto, o nível 5 (Frases) fica liberado para todos.
+  /// Quando a cobrança via Stripe entrar no ar, voltar para `true` para
+  /// reativar a checagem de assinatura em `_checkSubscription`.
+  static const bool kPaywallEnabled = false;
+
   /// Cache do nível desbloqueado (evita queries repetidas numa mesma sessão de uso).
   int? _cachedUnlockedLevel;
 
@@ -66,6 +72,9 @@ class GatekeeperService {
 
   /// Verifica assinatura no Supabase (para nível 5+).
   Future<bool> _checkSubscription() async {
+    // Paywall desligado (Stripe ainda não configurado): libera o acesso.
+    if (!kPaywallEnabled) return true;
+
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return false;
 
