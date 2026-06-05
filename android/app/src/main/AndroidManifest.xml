@@ -55,5 +55,10 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Necessário para o flutter_tts localizar o motor de síntese de fala
+             do dispositivo no Android 11+ (package visibility). -->
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE"/>
+        </intent>
     </queries>
 </manifest>

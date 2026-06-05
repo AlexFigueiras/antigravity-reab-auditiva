@@ -1,21 +1,74 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/rehab_session.dart';
+import 'supabase_service.dart';
 
-/// GATEKEEPER SERVICE: Gestor de Acesso e Monetização [GATEKEEPER]
+/// GATEKEEPER SERVICE: Gestor de Acesso por Desempenho e Assinatura
+///
+/// Regras de desbloqueio (ver PRODUTO.md §6):
+///   - Nível 2 (Distinguir sons): sempre liberado (com audiograma)
+///   - Nível 3 (De que lado): desbloqueia com ≥70% de acerto no nível 2 (média de 3 sessões)
+///   - Nível 4 (No barulho): desbloqueia com ≥70% de acerto no nível 3 (média de 3 sessões)
+///   - Nível 5 (Frases): paywall — exige assinatura
 class GatekeeperService {
   static final GatekeeperService _instance = GatekeeperService._internal();
   factory GatekeeperService() => _instance;
   GatekeeperService._internal();
 
-  /// Verifica se o usuário tem permissão para acessar o nível solicitado
+  /// Cache do nível desbloqueado (evita queries repetidas numa mesma sessão de uso).
+  int? _cachedUnlockedLevel;
+
+  /// Limpa o cache — chamar após cada sessão de treino para reavaliar.
+  void invalidateCache() => _cachedUnlockedLevel = null;
+
+  /// Verifica se o usuário tem permissão para acessar o nível solicitado.
   Future<bool> checkAccess(int level) async {
-    // Níveis 1 e 2 são gratuitos [REABILITAÇÃO BASE]
+    // Nível 2 é gratuito e sempre acessível
     if (level <= 2) return true;
 
+    // Níveis 3 e 4: desbloqueio por desempenho
+    if (level <= 4) {
+      return await _checkPerformanceUnlock(level);
+    }
+
+    // Nível 5+: paywall (assinatura)
+    return await _checkSubscription();
+  }
+
+  /// Retorna o nível máximo desbloqueado por desempenho (2, 3 ou 4).
+  /// Usa cache para evitar queries repetidas.
+  Future<int> getUnlockedLevel() async {
+    if (_cachedUnlockedLevel != null) return _cachedUnlockedLevel!;
+
+    final sessions = await SupabaseService().getAllSessions();
+    _cachedUnlockedLevel = RehabSession.calculateUnlockedLevel(sessions);
+    return _cachedUnlockedLevel!;
+  }
+
+  /// Verifica desbloqueio por desempenho: o nível N requer ≥70% no nível N-1.
+  Future<bool> _checkPerformanceUnlock(int level) async {
+    final unlockedLevel = await getUnlockedLevel();
+    return level <= unlockedLevel;
+  }
+
+  /// Retorna a acurácia média recente de um nível — usado na UI para mostrar
+  /// progresso ao desbloqueio ("Você está com 58% — falta pouco!").
+  Future<double> getAverageAccuracy(int level) async {
+    final sessions = await SupabaseService().getSessionsByLevel(level);
+    if (sessions.isEmpty) return 0;
+    final rehabLevel = RehabLevel.values.firstWhere(
+      (e) => e.value == level,
+      orElse: () => RehabLevel.phonemicDiscrimination,
+    );
+    return RehabSession.averageAccuracyForLevel(
+        sessions.cast<RehabSession>(), rehabLevel);
+  }
+
+  /// Verifica assinatura no Supabase (para nível 5+).
+  Future<bool> _checkSubscription() async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return false;
 
-    // Consulta Status de Assinatura no Perfil
     try {
       final res = await Supabase.instance.client
           .from('profiles')
@@ -24,13 +77,10 @@ class GatekeeperService {
           .maybeSingle();
 
       final status = res?['subscription_status'] as String? ?? 'free';
-
-      // Níveis 3 e 4 exigem status 'pro' ou 'elite'
       return status != 'free';
     } catch (e) {
-      debugPrint("Erro ao verificar acesso: $e");
-      // Em caso de falha, negamos acesso ao conteúdo pago (fail-closed).
-      return false;
+      debugPrint("Erro ao verificar assinatura: $e");
+      return false; // fail-closed
     }
   }
 
@@ -39,9 +89,7 @@ class GatekeeperService {
   /// IMPORTANTE: a promoção para 'pro' NÃO é feita pelo cliente. O cliente
   /// não tem permissão para alterar `subscription_status` (protegido por
   /// trigger no Postgres — ver supabase_migration_003.sql). O upgrade real
-  /// deve ocorrer no backend, via webhook do provedor de pagamento (Stripe),
-  /// que usa a service_role para escrever 'pro' no perfil. Após o pagamento,
-  /// o cliente apenas re-consulta o status atualizado.
+  /// deve ocorrer no backend, via webhook do Stripe (service_role).
   Future<bool> refreshSubscriptionStatus() async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return false;

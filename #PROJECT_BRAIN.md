@@ -47,12 +47,21 @@ De acordo com as diretrizes globais do projeto:
 - [x] AudioServiceManager (Ciclo de Vida/forceStopAll) implementado.
 - [x] Ambiente Flutter configurado.
 - [x] Motor de Áudio Nativo robustecido.
+- [x] **Redesign UX do fluxo de treinos (2026-06-04):**
+  - TrainingDashboard sem abas — cada módulo é tela própria (`level` param).
+  - Desbloqueio por desempenho: ≥70% média 3 sessões (não paywall) para níveis 3 e 4.
+  - Paywall apenas para "Frases do dia a dia" (nível 5).
+  - HomeScreen: cards com anel de progresso animado, streak badge, badge "NOVO".
+  - MissionReportScreen: anel de acurácia animado, métricas reais (sem XP/pontos fake).
+  - ProgressScreen: paleta consistente, cards por módulo, SRT com linguagem humana.
+  - GatekeeperService: desbloqueio por desempenho com cache + invalidação pós-sessão.
+  - SupabaseService: `getSessionsByLevel()`, `getTrainingStreak()`, `getSessionCountsByLevel()`.
 
 **Próximos Passos:** 
-1. **Refatoração UI:** Aplicar os novos Design Tokens Industriais na `HomeScreen`.
-2. **Fluxo de Energia:** Bloquear UI ao atingir 0 de Energia Neural no `GamificationController`.
-3. **Integração Supabase Profile:** Sincronizar dados de XP/Streak no login via `SupabaseService`.
-4. **Skill 5 Analytics:** Vincular acertos de fonemas agudos ao XP 2x e progressão de nível.
+1. **Integração Stripe:** Fluxo real de checkout para nível 5 (Frases do dia a dia).
+2. **Confetti/celebração:** Adicionar animação de confete na tela de resultado ao atingir ≥80%.
+3. **iOS:** Suporte ao motor de áudio nativo em iOS.
+4. **pffft:** Implementação real do FFT se a performance exigir.
 
 
 5. Gestão Proativa de Skills

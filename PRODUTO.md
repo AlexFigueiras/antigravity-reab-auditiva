@@ -79,10 +79,12 @@ Auditoria do código em 2026-06-03. Honestidade total para sabermos o que aprove
   conforme acerto/erro — base correta para estimar o SRT.
 
 ### Teatro ou quebrado (corrigir ou remover)
-- ❌ **Personalização desligada (bug crítico):** `getSmartPhoneme()` deveria
-  escolher palavras com os sons que *este* usuário não ouve, lendo o audiograma.
-  Mas é chamada com lista vazia (`getSmartPhoneme([])` em `training_dashboard.dart`),
-  então a escolha é **sempre aleatória**. **A promessa central do app não acontece.**
+- ✅ **Personalização ligada (corrigido em 2026-06-04):** `getSmartPhoneme()`
+  lê o audiograma carregado do Supabase (`_loadAudiogram` em
+  `training_dashboard.dart`) e prioriza os pares mínimos nas faixas de perda
+  > 25 dB HL. Sem audiograma, a função retorna `null` e o treino é bloqueado
+  com um aviso pedindo o teste de audição — em vez de fingir personalização
+  com sorteio aleatório (honestidade clínica, §5).
 - ❌ **Gráfico de "evolução" falso** (`home_screen.dart`, `_buildEvolutionChart`):
   pontos fixos, decorativos. Mostra progresso que não existe.
 - ❌ **"Fadiga Neural" / repouso de 4h** (`gamification_controller.dart`): punição
@@ -188,6 +190,17 @@ Definir quem ajudamos, o que tratamos e como medimos. ✅ feito ao ler isto.
       (correto), mas falta o fluxo verdadeiro via webhook no backend.
 - [ ] Suporte a iOS (hoje o motor nativo é focado em Android/Oboe).
 - [ ] Implementação real do `pffft` (hoje é stub) se a performance de FFT exigir.
+
+### Voz das palavras (TTS) — decisão de 2026-06-04
+A síntese de fala usa o **motor TTS nativo do dispositivo** (`flutter_tts`,
+`SystemTtsService`): gratuito, offline e sem servidor. O WAV gerado é reamostrado
+para 48 kHz e injetado no **mesmo pipeline DSP nativo** (Oboe), preservando o
+ganho compensatório de meia-perda — ou seja, a personalização clínica continua
+valendo para a voz. A antiga `GoogleTTSService` (Google Cloud Wavenet) foi
+desligada: a chave do `.env` falhava com 401 (API key não é aceita; exige OAuth2).
+- [ ] *(opcional, futuro)* Reativar Google Wavenet via proxy Supabase Edge Function
+      (OAuth2 com service account) caso se queira qualidade de voz superior à do
+      sistema. Só vale o custo/infra se a voz nativa se mostrar insuficiente.
 
 ---
 

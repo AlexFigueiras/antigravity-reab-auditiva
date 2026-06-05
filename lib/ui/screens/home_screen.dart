@@ -1,20 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '../../core/gamification_controller.dart';
 import '../../models/audiogram.dart';
+import '../../models/rehab_session.dart';
 import '../../services/gatekeeper_service.dart';
 import '../../services/supabase_service.dart';
-import '../../screens/widgets/technical_dashboard.dart';
 import '../../screens/threshold_test_screen.dart';
 import 'training_dashboard.dart';
-import 'calibration_screen.dart';
 import 'progress_screen.dart';
 import 'sentence_training_screen.dart';
 import 'widgets/self_perception_prompt.dart';
 
-/// HOME SCREEN: Dashboard Central de Progressão [ORQUESTRADOR]
+/// Tela inicial: acolhedora, clara e simples. Pensada para 55–75 anos —
+/// linguagem humana, fontes grandes, cores calmas (ver PRODUTO.md §5 e §7).
+///
+/// Cada card de treino navega diretamente para a tela do seu módulo.
+/// Desbloqueio é por desempenho (≥70% no anterior), não por assinatura.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -27,14 +28,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _isPermanentlyDenied = false;
   List<Map<String, dynamic>> _accuracyHistory = [];
   bool _hasAudiogram = false;
+  int _unlockedLevel = 2;
+  int _streak = 0;
+  Map<int, double> _levelAccuracies = {};
+
+  // Paleta acolhedora — nada de verde fosfórico de "cockpit".
+  static const Color _bg = Color(0xFF101418);
+  static const Color _card = Color(0xFF1B2128);
+  static const Color _primary = Color(0xFF4F8DF7);
+  static const Color _textMain = Color(0xFFF2F4F7);
+  static const Color _textSoft = Color(0xFFB4BCC8);
 
   @override
   void initState() {
     super.initState();
     _checkPermissions();
-    _loadAccuracyHistory();
+    _loadAllData();
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAskSelfPerception());
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _maybeAskSelfPerception());
   }
 
   Future<void> _maybeAskSelfPerception() async {
@@ -72,17 +84,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _checkPermissions(); // Re-checa se o usuário voltou das configurações
+      _checkPermissions();
+      _loadAllData();
     }
   }
 
-  Future<void> _loadAccuracyHistory() async {
+  Future<void> _loadAllData() async {
     final history = await SupabaseService().getAccuracyHistory();
     final audiogram = await SupabaseService().getLatestAudiogram();
-    if (mounted) setState(() {
-      _accuracyHistory = history;
-      _hasAudiogram = audiogram != null;
-    });
+    final streak = await SupabaseService().getTrainingStreak();
+
+    // Calcular nível desbloqueado e acurácias por nível
+    GatekeeperService().invalidateCache();
+    final unlockedLevel = await GatekeeperService().getUnlockedLevel();
+    final Map<int, double> levelAccs = {};
+    for (final lvl in [2, 3, 4]) {
+      levelAccs[lvl] = await GatekeeperService().getAverageAccuracy(lvl);
+    }
+
+    if (mounted) {
+      setState(() {
+        _accuracyHistory = history;
+        _hasAudiogram = audiogram != null;
+        _unlockedLevel = unlockedLevel;
+        _streak = streak;
+        _levelAccuracies = levelAccs;
+      });
+    }
   }
 
   Future<void> _checkPermissions() async {
@@ -91,7 +119,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     setState(() {
       _hasPermissions = mic.isGranted && bluetooth.isGranted;
-      _isPermanentlyDenied = mic.isPermanentlyDenied || bluetooth.isPermanentlyDenied;
+      _isPermanentlyDenied =
+          mic.isPermanentlyDenied || bluetooth.isPermanentlyDenied;
     });
   }
 
@@ -100,7 +129,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       Permission.microphone,
       Permission.bluetoothConnect,
     ].request();
-
     _checkPermissions();
   }
 
@@ -108,58 +136,58 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     if (!_hasPermissions) return _buildPermissionGuard();
 
-    final controller = context.watch<GamificationController>();
-
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
+      backgroundColor: _bg,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              GestureDetector(
-                onLongPress: () {
-                  showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (_) => const TechnicalDashboard(),
-                  );
-                },
-                child: _buildMainHeader(controller.acuityLevel),
+              _buildGreeting(),
+              const SizedBox(height: 24),
+              _buildProgressSummary(),
+              const SizedBox(height: 28),
+              Text("Seus treinos",
+                  style: TextStyle(
+                      color: _textMain,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              Text(
+                  "Comece pelo teste de audição — ele deixa tudo no seu ritmo.",
+                  style:
+                      TextStyle(color: _textSoft, fontSize: 15, height: 1.4)),
+              const SizedBox(height: 16),
+              _buildAudiogramCard(context),
+              const SizedBox(height: 12),
+              _buildLevelCard(
+                context,
+                level: 2,
+                title: "Distinguir sons parecidos",
+                subtitle:
+                    'Treine sons que se confundem, como "fala" e "sala".',
+                icon: Icons.graphic_eq,
               ),
-              const SizedBox(height: 30),
-              _buildProgressCard(controller.totalXP),
-              const SizedBox(height: 30),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text("Sua evolução",
-                      style: TextStyle(
-                          color: Colors.white24,
-                          fontSize: 10,
-                          letterSpacing: 2)),
-                  TextButton(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                          builder: (_) => const ProgressScreen()),
-                    ),
-                    child: const Text("Ver detalhes",
-                        style: TextStyle(
-                            color: Color(0xFF2563EB), fontSize: 13)),
-                  ),
-                ],
+              const SizedBox(height: 12),
+              _buildLevelCard(
+                context,
+                level: 3,
+                title: "De que lado vem o som",
+                subtitle:
+                    "Perceba a direção do som — esquerda, centro, direita.",
+                icon: Icons.surround_sound,
               ),
-              const SizedBox(height: 15),
-              GestureDetector(
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ProgressScreen()),
-                ),
-                child: _buildEvolutionChart(),
+              const SizedBox(height: 12),
+              _buildLevelCard(
+                context,
+                level: 4,
+                title: "Entender no meio do barulho",
+                subtitle: "Acompanhe a fala mesmo com som de fundo.",
+                icon: Icons.hearing,
               ),
-              const Spacer(),
-              _buildStartButton(context),
+              const SizedBox(height: 12),
+              _buildSentenceCard(context),
             ],
           ),
         ),
@@ -169,36 +197,61 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _buildPermissionGuard() {
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
+      backgroundColor: _bg,
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(40.0),
+          padding: const EdgeInsets.all(32.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.security, color: Color(0xFFE11D48), size: 64),
-              const SizedBox(height: 24),
-              const Text("Precisamos de permissões", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 4)),
+              const Icon(Icons.volume_up_rounded, color: _primary, size: 72),
+              const SizedBox(height: 28),
+              Text("Vamos preparar o som",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      color: _textMain,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700)),
               const SizedBox(height: 16),
               Text(
-                "A reabilitação neural exige acesso ao Microfone (para calibração) e ao Bluetooth (detecção de fones).",
+                "Para tocar os sons do treino e reconhecer seus fones, "
+                "o app precisa da sua permissão para o microfone e o Bluetooth.",
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12),
+                style:
+                    TextStyle(color: _textSoft, fontSize: 16, height: 1.5),
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 36),
               SizedBox(
                 width: double.infinity,
+                height: 56,
                 child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB), foregroundColor: Colors.white),
-                  onPressed: _isPermanentlyDenied ? openAppSettings : _requestPermissions,
-                  child: Text(_isPermanentlyDenied ? "ABRIR CONFIGURAÇÕES" : "AUTORIZAR ACESSO"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: _isPermanentlyDenied
+                      ? openAppSettings
+                      : _requestPermissions,
+                  child: Text(
+                      _isPermanentlyDenied
+                          ? "Abrir configurações"
+                          : "Permitir",
+                      style: const TextStyle(
+                          fontSize: 17, fontWeight: FontWeight.w600)),
                 ),
               ),
               if (_isPermanentlyDenied)
                 Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Text("O acesso foi negado permanentemente. Por favor, habilite manualmente.", 
-                    textAlign: TextAlign.center, style: TextStyle(color: Colors.redAccent.withOpacity(0.7), fontSize: 10)),
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Text(
+                    "A permissão foi recusada. Toque acima para abrir as "
+                    "configurações e habilitar manualmente.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: _textSoft, fontSize: 14, height: 1.4),
+                  ),
                 ),
             ],
           ),
@@ -207,92 +260,71 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildMainHeader(String level) {
+  Widget _buildGreeting() {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("TREINO AUDITIVO", style: TextStyle(color: Colors.white38, letterSpacing: 5, fontSize: 10)),
-            const SizedBox(height: 8),
-            Text(level, style: const TextStyle(color: Color(0xFF00FF41), fontSize: 28, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
-            Container(height: 2, width: 120, color: const Color(0xFF00FF41).withOpacity(0.5)),
-          ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Olá!",
+                  style: TextStyle(
+                      color: _textMain,
+                      fontSize: 30,
+                      fontWeight: FontWeight.w800)),
+              const SizedBox(height: 6),
+              Text("Que bom ter você aqui. Vamos treinar um pouco hoje?",
+                  style:
+                      TextStyle(color: _textSoft, fontSize: 16, height: 1.4)),
+            ],
+          ),
         ),
-        IconButton(
-          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CalibrationScreen())),
-          icon: const Icon(Icons.tune, color: Colors.white24),
-          tooltip: "Calibrar Latência",
-        ),
+        if (_streak > 0) ...[
+          const SizedBox(width: 12),
+          _buildStreakBadge(),
+        ],
       ],
     );
   }
 
-  Widget _buildProgressCard(int xp) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(color: const Color(0xFF1A1A1A), border: Border.all(color: Colors.white12)),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("Pontos de treino", style: TextStyle(color: Colors.white38, fontSize: 8)),
-              Text(xp.toString().padLeft(6, '0'), style: const TextStyle(color: Colors.white, fontSize: 24, fontFamily: 'monospace')),
-            ],
+  Widget _buildStreakBadge() {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 800),
+      curve: Curves.elasticOut,
+      builder: (context, value, child) {
+        return Transform.scale(
+          scale: value,
+          child: child,
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFF6B35), Color(0xFFFF9F1C)],
           ),
-          const Icon(Icons.show_chart, color: Color(0xFF2563EB), size: 40),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEvolutionChart() {
-    if (_accuracyHistory.isEmpty) {
-      return Container(
-        height: 120,
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(color: const Color(0xFF1A1A1A), border: Border.all(color: Colors.white12)),
-        child: const Center(
-          child: Text(
-            "Faça seu primeiro treino para ver sua evolução aqui.",
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white38, fontSize: 13),
-          ),
+          borderRadius: BorderRadius.circular(14),
         ),
-      );
-    }
-    final spots = _accuracyHistory.asMap().entries.map((e) {
-      final acc = (e.value['accuracy'] as num?)?.toDouble() ?? 0.0;
-      return FlSpot(e.key.toDouble(), acc);
-    }).toList();
-    return Container(
-      height: 180,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: const Color(0xFF1A1A1A), border: Border.all(color: Colors.white12)),
-      child: LineChart(
-        LineChartData(
-          gridData: const FlGridData(show: true, drawVerticalLine: false, horizontalInterval: 20),
-          titlesData: FlTitlesData(
-            show: true,
-            leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 30, getTitlesWidget: (v, _) => Text('${v.toInt()}%', style: const TextStyle(color: Colors.white38, fontSize: 9)))),
-            bottomTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          ),
-          borderData: FlBorderData(show: false),
-          minX: 0, maxX: (spots.length - 1).toDouble().clamp(1, double.infinity), minY: 0, maxY: 100,
-          lineBarsData: [
-            LineChartBarData(
-              spots: spots,
-              isCurved: true,
-              color: const Color(0xFF2563EB),
-              barWidth: 3,
-              isStrokeCapRound: true,
-              dotData: const FlDotData(show: true),
-              belowBarData: BarAreaData(show: true, color: const Color(0xFF2563EB).withOpacity(0.1)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("🔥",
+                style: TextStyle(fontSize: 22)),
+            Text(
+              "$_streak",
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800),
+            ),
+            const Text(
+              "dias",
+              style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600),
             ),
           ],
         ),
@@ -300,25 +332,95 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildStartButton(BuildContext context) {
-    return Column(
-      children: [
-        _buildAudiogramCard(context),
-        const SizedBox(height: 12),
-        _buildLevelCard(context, 2, "Distinguir sons", "Disponível"),
-        const SizedBox(height: 12),
-        _buildLevelCard(context, 3, "De que lado vem o som", "Requer assinatura", isLocked: true),
-        const SizedBox(height: 12),
-        _buildLevelCard(context, 4, "Entender no barulho", "Requer assinatura", isLocked: true),
-        const SizedBox(height: 12),
-        _buildSentenceCard(context),
-      ],
+  /// Resumo honesto de progresso: acerto recente real (não XP, não "índice").
+  Widget _buildProgressSummary() {
+    final hasData = _accuracyHistory.isNotEmpty;
+    final lastAcc = hasData
+        ? ((_accuracyHistory.last['accuracy'] as num?)?.toDouble() ?? 0.0)
+        : 0.0;
+
+    return InkWell(
+      onTap: () async {
+        await Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const ProgressScreen()),
+        );
+        // Reload data when returning from progress screen
+        _loadAllData();
+      },
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: _card,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Sua evolução",
+                      style: TextStyle(
+                          color: _textMain,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 6),
+                  Text(
+                    hasData
+                        ? "Últimos acertos: ${lastAcc.toStringAsFixed(0)}%. Toque para ver mais."
+                        : "Faça seu primeiro treino para acompanhar aqui.",
+                    style: TextStyle(
+                        color: _textSoft, fontSize: 15, height: 1.4),
+                  ),
+                  if (hasData) ...[
+                    const SizedBox(height: 16),
+                    SizedBox(height: 70, child: _buildMiniChart()),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(Icons.chevron_right, color: _textSoft, size: 28),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMiniChart() {
+    final spots = _accuracyHistory.asMap().entries.map((e) {
+      final acc = (e.value['accuracy'] as num?)?.toDouble() ?? 0.0;
+      return FlSpot(e.key.toDouble(), acc);
+    }).toList();
+    return LineChart(
+      LineChartData(
+        gridData: const FlGridData(show: false),
+        titlesData: const FlTitlesData(show: false),
+        borderData: FlBorderData(show: false),
+        minX: 0,
+        maxX: (spots.length - 1).toDouble().clamp(1, double.infinity),
+        minY: 0,
+        maxY: 100,
+        lineBarsData: [
+          LineChartBarData(
+            spots: spots,
+            isCurved: true,
+            color: _primary,
+            barWidth: 3,
+            isStrokeCapRound: true,
+            dotData: const FlDotData(show: false),
+            belowBarData: BarAreaData(
+                show: true, color: _primary.withValues(alpha: 0.12)),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildAudiogramCard(BuildContext context) {
     final isDone = _hasAudiogram;
-    return InkWell(
+    return _Card(
       onTap: () async {
         final result = await Navigator.of(context).push<Map<String, dynamic>>(
           MaterialPageRoute(builder: (_) => const ThresholdTestScreen()),
@@ -340,64 +442,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           if (context.mounted) {
             setState(() => _hasAudiogram = true);
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Teste salvo! O treino agora é personalizado para você.")),
+              const SnackBar(
+                  content: Text(
+                      "Teste salvo! O treino agora é personalizado para você.")),
             );
           }
         } catch (e) {
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Erro ao salvar o teste. Tente novamente.")),
+              const SnackBar(
+                  content: Text("Erro ao salvar o teste. Tente novamente.")),
             );
           }
         }
       },
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDone ? const Color(0xFF111111) : const Color(0xFF0D2137),
-          border: Border.all(
-            color: isDone ? Colors.white12 : const Color(0xFF2563EB),
-            width: isDone ? 1 : 2,
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Teste de audição",
-                  style: TextStyle(
-                    color: isDone ? Colors.white54 : Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  isDone ? "Feito — refazer a qualquer hora" : "Faça primeiro — personaliza todo o treino",
-                  style: TextStyle(
-                    color: isDone ? Colors.white24 : const Color(0xFF2563EB),
-                    fontSize: 10,
-                  ),
-                ),
-              ],
-            ),
-            Icon(
-              isDone ? Icons.check_circle_outline : Icons.hearing,
-              color: isDone ? Colors.white24 : const Color(0xFF2563EB),
-              size: 24,
-            ),
-          ],
-        ),
-      ),
+      icon: isDone ? Icons.check_circle : Icons.hearing,
+      iconColor: isDone ? const Color(0xFF4CAF7D) : _primary,
+      highlight: !isDone,
+      title: "Teste de audição",
+      subtitle: isDone
+          ? "Concluído. Você pode refazer quando quiser."
+          : "Comece por aqui — ele personaliza todo o seu treino.",
     );
   }
 
   Widget _buildSentenceCard(BuildContext context) {
-    return InkWell(
+    return _Card(
       onTap: () async {
-        final hasAccess = await GatekeeperService().checkAccess(4);
+        final hasAccess = await GatekeeperService().checkAccess(5);
         if (!context.mounted) return;
         if (!hasAccess) {
           _showPaywall(context);
@@ -408,123 +480,476 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         if (audiogram == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-                content: Text("Faça primeiro o teste de audição para liberar este treino.")),
+                content: Text(
+                    "Faça primeiro o teste de audição para liberar este treino.")),
           );
           return;
         }
         Navigator.of(context).push(MaterialPageRoute(
             builder: (_) => SentenceTrainingScreen(audiogram: audiogram)));
       },
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF111111),
-          border: Border.all(color: Colors.white10),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text("Frases do dia a dia",
-                    style: TextStyle(
-                        color: Colors.white38,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'monospace')),
-                Text("Requer assinatura",
-                    style: TextStyle(color: Color(0xFFE11D48), fontSize: 8)),
-              ],
-            ),
-            const Icon(Icons.lock_outline, color: Colors.white10, size: 20),
-          ],
-        ),
-      ),
+      icon: Icons.chat_bubble_outline,
+      iconColor: _textSoft,
+      locked: true,
+      title: "Frases do dia a dia",
+      subtitle:
+          "Entenda frases inteiras no barulho. Disponível na assinatura.",
     );
   }
 
-  Widget _buildLevelCard(BuildContext context, int level, String title, String subtitle, {bool isLocked = false}) {
-    return InkWell(
+  Widget _buildLevelCard(
+    BuildContext context, {
+    required int level,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+  }) {
+    final isLocked = level > _unlockedLevel;
+    final accuracy = _levelAccuracies[level] ?? 0.0;
+    final hasProgress = accuracy > 0;
+
+    // Texto de desbloqueio para cards bloqueados
+    String lockSubtitle;
+    if (isLocked) {
+      final prevLevel = level - 1;
+      final prevAcc = _levelAccuracies[prevLevel] ?? 0.0;
+      if (prevAcc > 0) {
+        lockSubtitle =
+            "Acerte 70% no exercício anterior para liberar. Você está com ${prevAcc.toStringAsFixed(0)}%.";
+      } else {
+        lockSubtitle =
+            "Acerte 70% no exercício anterior para liberar este treino.";
+      }
+    } else {
+      lockSubtitle = subtitle;
+    }
+
+    return _Card(
       onTap: () async {
-        final hasAccess = await GatekeeperService().checkAccess(level);
-        if (hasAccess) {
-          if (context.mounted) {
-            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TrainingDashboard()));
-          }
-        } else {
-          if (context.mounted) _showPaywall(context);
+        if (isLocked) {
+          _showLockedExplanation(context, level);
+          return;
         }
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+              builder: (_) => TrainingDashboard(level: level)),
+        );
+        // Recarrega dados ao voltar (novo desbloqueio possível)
+        _loadAllData();
       },
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF111111),
-          border: Border.all(color: isLocked ? Colors.white10 : const Color(0xFF2563EB).withOpacity(0.3)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: TextStyle(color: isLocked ? Colors.white38 : Colors.white, fontSize: 12, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
-                Text(subtitle, style: TextStyle(color: isLocked ? const Color(0xFFE11D48) : const Color(0xFF00FF41), fontSize: 8)),
-              ],
-            ),
-            Icon(isLocked ? Icons.lock_outline : Icons.play_arrow, color: isLocked ? Colors.white10 : const Color(0xFF00FF41), size: 20),
-          ],
-        ),
-      ),
+      icon: icon,
+      iconColor: isLocked ? _textSoft : _primary,
+      locked: isLocked,
+      title: title,
+      subtitle: lockSubtitle,
+      progress: hasProgress && !isLocked ? accuracy / 100 : null,
+      isNewlyUnlocked: _isNewlyUnlocked(level),
     );
   }
 
-  void _showPaywall(BuildContext context) {
+  bool _isNewlyUnlocked(int level) {
+    // Nível recém-desbloqueado: está desbloqueado mas sem sessões
+    if (level > 2 && level <= _unlockedLevel) {
+      final acc = _levelAccuracies[level] ?? 0.0;
+      return acc == 0;
+    }
+    return false;
+  }
+
+  void _showLockedExplanation(BuildContext context, int level) {
+    final prevLevel = level - 1;
+    final prevAcc = _levelAccuracies[prevLevel] ?? 0.0;
+    final prevName = prevLevel == 2
+        ? "Distinguir sons"
+        : prevLevel == 3
+            ? "De que lado vem o som"
+            : "Entender no barulho";
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF1A1A1A),
-      shape: const BeveledRectangleBorder(),
+      backgroundColor: _card,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(32),
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(28, 28, 28, 36),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("BOSYN Pro", style: TextStyle(color: Color(0xFF00FF41), fontSize: 20, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
-              const SizedBox(height: 12),
-              const Text(
-                "Os módulos de direção do som e entender no barulho estão disponíveis com a assinatura.",
-                style: TextStyle(color: Colors.white70, fontSize: 12),
+              Container(
+                width: 44,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 24),
+                decoration: BoxDecoration(
+                    color: _textSoft.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2)),
               ),
-              const SizedBox(height: 30),
+              const Text("Como desbloquear",
+                  style: TextStyle(
+                      color: _textMain,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 16),
+              Text(
+                "Esse treino é liberado quando você atingir 70% de acertos "
+                "no \"$prevName\" (média das últimas 3 sessões).",
+                style:
+                    TextStyle(color: _textSoft, fontSize: 16, height: 1.5),
+              ),
+              const SizedBox(height: 16),
+              if (prevAcc > 0) ...[
+                _ProgressBar(
+                    value: prevAcc / 100, target: 0.7, label: prevName),
+                const SizedBox(height: 12),
+                Text(
+                  prevAcc >= 60
+                      ? "Quase lá! Você está com ${prevAcc.toStringAsFixed(0)}%."
+                      : "Você está com ${prevAcc.toStringAsFixed(0)}%. Continue treinando!",
+                  style: TextStyle(
+                      color: _primary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600),
+                ),
+              ] else
+                Text(
+                  "Faça pelo menos 3 sessões de \"$prevName\" para começar a medir seu progresso.",
+                  style: TextStyle(
+                      color: _textSoft, fontSize: 15, height: 1.4),
+                ),
+              const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
-                height: 60,
+                height: 52,
                 child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB), foregroundColor: Colors.white, shape: const BeveledRectangleBorder()),
-                  onPressed: () async {
-                    // TODO(pagamento): integrar o fluxo real do flutter_stripe.
-                    // O cliente NÃO promove a assinatura — quem grava 'pro' é o
-                    // webhook do Stripe no backend (service_role). Aqui apenas:
-                    //   1) abrir o PaymentSheet do Stripe;
-                    //   2) após confirmação, chamar refreshSubscriptionStatus().
-                    // Enquanto a integração não existe, NÃO concedemos acesso.
-                    debugPrint("Checkout Stripe ainda não integrado.");
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Pagamento indisponível: integração Stripe pendente.")),
-                      );
-                    }
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (_) =>
+                              TrainingDashboard(level: prevLevel)),
+                    );
                   },
-                  child: const Text("Assinar BOSYN Pro", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2)),
+                  child: Text("Treinar \"$prevName\"",
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w600)),
                 ),
               ),
             ],
           ),
         );
       },
+    );
+  }
+
+  void _showPaywall(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _card,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(28, 28, 28, 36),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 24),
+                decoration: BoxDecoration(
+                    color: _textSoft.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2)),
+              ),
+              Text("Treino completo",
+                  style: TextStyle(
+                      color: _textMain,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 12),
+              Text(
+                "O treino de frases do dia a dia faz parte da assinatura. "
+                "Assim você treina de ponta a ponta, no seu ritmo.",
+                style:
+                    TextStyle(color: _textSoft, fontSize: 16, height: 1.5),
+              ),
+              const SizedBox(height: 28),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: () async {
+                    // TODO(pagamento): integrar o fluxo real do flutter_stripe.
+                    debugPrint("Checkout Stripe ainda não integrado.");
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text(
+                                "Pagamento indisponível: integração Stripe pendente.")),
+                      );
+                    }
+                  },
+                  child: const Text("Assinar",
+                      style: TextStyle(
+                          fontSize: 17, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Barra de progresso animada para o bottom sheet de desbloqueio.
+class _ProgressBar extends StatelessWidget {
+  const _ProgressBar({
+    required this.value,
+    required this.target,
+    required this.label,
+  });
+
+  final double value;
+  final double target;
+  final String label;
+
+  static const _primary = Color(0xFF4F8DF7);
+  static const _correct = Color(0xFF3FB37F);
+  static const _card = Color(0xFF1B2128);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Stack(
+          children: [
+            // Background
+            Container(
+              height: 14,
+              decoration: BoxDecoration(
+                color: _card,
+                borderRadius: BorderRadius.circular(7),
+              ),
+            ),
+            // Progress
+            FractionallySizedBox(
+              widthFactor: value.clamp(0, 1),
+              child: Container(
+                height: 14,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: value >= target
+                        ? [_correct, _correct]
+                        : [_primary, _primary.withValues(alpha: 0.7)],
+                  ),
+                  borderRadius: BorderRadius.circular(7),
+                ),
+              ),
+            ),
+            // Target marker
+            Positioned(
+              left:
+                  (target * (MediaQuery.of(context).size.width - 56 - 28 * 2))
+                      .clamp(0, double.infinity),
+              child: Container(
+                width: 2,
+                height: 14,
+                color: Colors.white54,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text("${(value * 100).toStringAsFixed(0)}% atual",
+                style: const TextStyle(color: Colors.white54, fontSize: 12)),
+            Text("Meta: ${(target * 100).toStringAsFixed(0)}%",
+                style: const TextStyle(color: Colors.white54, fontSize: 12)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Cartão de treino reutilizável: grande, arredondado, com ícone claro.
+class _Card extends StatelessWidget {
+  const _Card({
+    required this.onTap,
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    this.locked = false,
+    this.highlight = false,
+    this.progress,
+    this.isNewlyUnlocked = false,
+  });
+
+  final VoidCallback onTap;
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final bool locked;
+  final bool highlight;
+  final double? progress;
+  final bool isNewlyUnlocked;
+
+  static const Color _card = Color(0xFF1B2128);
+  static const Color _primary = Color(0xFF4F8DF7);
+  static const Color _textMain = Color(0xFFF2F4F7);
+  static const Color _textSoft = Color(0xFFB4BCC8);
+  static const Color _correct = Color(0xFF3FB37F);
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: _card,
+            borderRadius: BorderRadius.circular(18),
+            border: highlight
+                ? Border.all(color: _primary, width: 1.5)
+                : isNewlyUnlocked
+                    ? Border.all(color: _correct, width: 1.5)
+                    : null,
+          ),
+          child: Row(
+            children: [
+              // Ícone com mini anel de progresso
+              _buildIconWithProgress(),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(title,
+                              style: TextStyle(
+                                  color: locked ? _textSoft : _textMain,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700)),
+                        ),
+                        if (isNewlyUnlocked)
+                          _NewBadge(),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(subtitle,
+                        style: TextStyle(
+                            color: _textSoft,
+                            fontSize: 14,
+                            height: 1.35)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                locked ? Icons.lock_outline : Icons.chevron_right,
+                color: _textSoft,
+                size: 24,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIconWithProgress() {
+    return SizedBox(
+      width: 52,
+      height: 52,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Progress ring (if available)
+          if (progress != null)
+            SizedBox.expand(
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: progress!),
+                duration: const Duration(milliseconds: 900),
+                curve: Curves.easeOutCubic,
+                builder: (context, value, _) {
+                  return CircularProgressIndicator(
+                    value: value,
+                    strokeWidth: 3,
+                    color: value >= 0.7 ? _correct : _primary,
+                    backgroundColor: _card,
+                    strokeCap: StrokeCap.round,
+                  );
+                },
+              ),
+            ),
+          // Icon background
+          Container(
+            width: progress != null ? 42 : 52,
+            height: progress != null ? 42 : 52,
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(progress != null ? 21 : 14),
+            ),
+            child: Icon(icon, color: iconColor, size: progress != null ? 22 : 28),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Badge "NOVO" animado quando um módulo é recém-desbloqueado.
+class _NewBadge extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.elasticOut,
+      builder: (context, value, child) {
+        return Transform.scale(scale: value, child: child);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: const Color(0xFF3FB37F),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: const Text(
+          "NOVO",
+          style: TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.5),
+        ),
+      ),
     );
   }
 }

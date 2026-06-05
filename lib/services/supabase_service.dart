@@ -203,4 +203,87 @@ class SupabaseService {
       'score': score,
     });
   }
+
+  /// Retorna sessões de um nível específico, ordenadas por data (mais recente primeiro).
+  /// Usado para calcular desbloqueio progressivo (média de 3 sessões).
+  Future<List<RehabSession>> getSessionsByLevel(int level) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return [];
+    try {
+      final List<dynamic> response = await Supabase.instance.client
+          .from('rehab_sessions')
+          .select()
+          .eq('user_id', user.id)
+          .eq('level', level)
+          .order('date', ascending: false)
+          .limit(10);
+      return response.map((data) => RehabSession.fromJson(data)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Calcula o streak de dias consecutivos de treino.
+  /// Conta quantos dias seguidos (incluindo hoje) o usuário tem sessões.
+  Future<int> getTrainingStreak() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return 0;
+    try {
+      final List<dynamic> response = await Supabase.instance.client
+          .from('rehab_sessions')
+          .select('date')
+          .eq('user_id', user.id)
+          .order('date', ascending: false)
+          .limit(60);
+      if (response.isEmpty) return 0;
+
+      // Extrai datas únicas (ignora horas)
+      final dates = response
+          .map((r) => DateTime.parse(r['date'] as String))
+          .map((d) => DateTime(d.year, d.month, d.day))
+          .toSet()
+          .toList()
+        ..sort((a, b) => b.compareTo(a));
+
+      final today = DateTime.now();
+      final todayDate = DateTime(today.year, today.month, today.day);
+
+      // Se o dia mais recente não é hoje nem ontem, streak = 0
+      final diff = todayDate.difference(dates.first).inDays;
+      if (diff > 1) return 0;
+
+      int streak = 1;
+      for (int i = 1; i < dates.length; i++) {
+        final gap = dates[i - 1].difference(dates[i]).inDays;
+        if (gap == 1) {
+          streak++;
+        } else {
+          break;
+        }
+      }
+      return streak;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Retorna contagem de sessões agrupadas por nível para a tela de progresso.
+  Future<Map<int, int>> getSessionCountsByLevel() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return {};
+    try {
+      final List<dynamic> response = await Supabase.instance.client
+          .from('rehab_sessions')
+          .select('level')
+          .eq('user_id', user.id);
+      final Map<int, int> counts = {};
+      for (final row in response) {
+        final level = row['level'] as int;
+        counts[level] = (counts[level] ?? 0) + 1;
+      }
+      return counts;
+    } catch (_) {
+      return {};
+    }
+  }
 }

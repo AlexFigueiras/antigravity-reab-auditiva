@@ -20,7 +20,7 @@ private:
     SamplePlayer noisePlayer;
     NoiseGenerator whiteNoiseGenerator;
 
-    float sampleRate = 48000.0f; 
+    float sampleRate = 48000.0f;
     std::atomic<float> targetPanning{0.0f}; // -1.0L, 0.0C, 1.0R
 
     // Event Tagging: Timestamp de hardware em nanosegundos para medir latência clínica

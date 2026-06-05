@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../audio_engine/audio_engine.dart';
 import '../models/audiogram.dart';
+import '../services/audio_accessibility.dart';
 
 class ThresholdTestScreen extends StatefulWidget {
   const ThresholdTestScreen({super.key});
@@ -28,6 +29,15 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
   bool _isTesting = false;
   bool _testFinished = false;
 
+  // Escolha de ouvido: o usuário decide qual lado testar (null = nada escolhido).
+  bool _earChosen = false;
+  // Quais orelhas já foram concluídas (para guiar o usuário a fazer as duas).
+  final Set<EarSide> _completedEars = {};
+
+  // Acessibilidade: "Áudio mono" do Android invalida o teste (toca igual nos
+  // dois ouvidos). Detectamos e avisamos.
+  bool _monoAudioOn = false;
+
   @override
   void initState() {
     super.initState();
@@ -39,6 +49,168 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
       leftEar: [],
       rightEar: [],
     ));
+    _checkMonoAudio();
+  }
+
+  Future<void> _checkMonoAudio() async {
+    final mono = await AudioAccessibility.isMonoAudioEnabled();
+    if (mounted) setState(() => _monoAudioOn = mono);
+  }
+
+  void _chooseEar(EarSide ear) {
+    setState(() {
+      _currentEar = ear;
+      _earChosen = true;
+      // Recomeça do grave (250 Hz): reseta o índice de frequência para 0.
+      // Sem isto, a orelha seguinte começava em 8000 Hz (resto da sessão anterior).
+      _currentFreqIndex = 0;
+      // Refaz os pontos desta orelha se ela já tinha sido testada.
+      if (ear == EarSide.left) {
+        _leftEarPoints.clear();
+      } else {
+        _rightEarPoints.clear();
+      }
+    });
+    _startFrequencyTest();
+  }
+
+  Widget _buildEarChooser() {
+    // Espaço para não ficar atrás da AppBar transparente (evita sobreposição
+    // do título "Teste de audição" com a pergunta abaixo).
+    final topGap = MediaQuery.of(context).padding.top + kToolbarHeight + 16;
+    return SafeArea(
+      top: false,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(24, topGap, 24, 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              "Qual ouvido você quer testar?",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            "Coloque os fones. Vamos testar um ouvido de cada vez.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white60, fontSize: 16, height: 1.4),
+          ),
+          const SizedBox(height: 28),
+
+          // Aviso de "Áudio mono" — invalida o teste.
+          if (_monoAudioOn)
+            Container(
+              margin: const EdgeInsets.only(bottom: 24),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE11D48).withValues(alpha: 0.12),
+                border: Border.all(color: const Color(0xFFE11D48)),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Icon(Icons.hearing_disabled, color: Color(0xFFFF6B8A)),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text("Áudio mono está ligado",
+                          style: TextStyle(
+                              color: Color(0xFFFF6B8A),
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold)),
+                    ),
+                  ]),
+                  SizedBox(height: 8),
+                  Text(
+                    "Seu celular está tocando o mesmo som nos dois ouvidos, o que "
+                    "atrapalha o teste. Desligue em:\n"
+                    "Configurações → Acessibilidade → Áudio → Áudio mono.",
+                    style: TextStyle(
+                        color: Colors.white70, fontSize: 14, height: 1.45),
+                  ),
+                ],
+              ),
+            ),
+
+          _earCard(EarSide.left),
+          const SizedBox(height: 16),
+          _earCard(EarSide.right),
+          const SizedBox(height: 28),
+
+          // Ver resultado (habilitado quando pelo menos uma orelha foi testada).
+          if (_completedEars.isNotEmpty)
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4F8DF7),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+                onPressed: _finishTest,
+                child: Text(
+                  _completedEars.length == 2
+                      ? "Ver resultado"
+                      : "Ver resultado (só 1 ouvido testado)",
+                  style: const TextStyle(
+                      fontSize: 17, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _earCard(EarSide ear) {
+    final isLeft = ear == EarSide.left;
+    final done = _completedEars.contains(ear);
+    final color = isLeft ? Colors.blueAccent : Colors.redAccent;
+    return InkWell(
+      onTap: () => _chooseEar(ear),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1B2128),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.5), width: 1.5),
+        ),
+        child: Row(
+          children: [
+            Icon(isLeft ? Icons.volume_up : Icons.volume_up,
+                color: color, size: 36),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(isLeft ? "Ouvido esquerdo" : "Ouvido direito",
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 19,
+                          fontWeight: FontWeight.bold)),
+                  Text(
+                    done ? "Já testado — toque para refazer" : "Tocar para testar",
+                    style: TextStyle(
+                        color: done ? const Color(0xFF4CAF7D) : Colors.white54,
+                        fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+            Icon(done ? Icons.check_circle : Icons.chevron_right,
+                color: done ? const Color(0xFF4CAF7D) : Colors.white38,
+                size: 26),
+          ],
+        ),
+      ),
+    );
   }
 
   void _startFrequencyTest() async {
@@ -62,6 +234,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
   }
 
   void _onResponse(bool detected) {
+    if (!_isTesting) return; // ignora toques fora de uma sessão ativa
     if (detected) {
       // Ouviu normalmente
       _heardOnce = true;
@@ -119,22 +292,14 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
         _lastHeardDb = 40.0;
       });
       _playCurrentTestTone();
-    } else if (_currentEar == EarSide.left) {
-      // Terminou orelha esquerda, passa para a direita
-      setState(() {
-        _currentEar = EarSide.right;
-        _currentFreqIndex = 0;
-        _currentDb = 40.0;
-        _heardOnce = false;
-        _lastHeardDb = 40.0;
-      });
-      // Pequeno delay antes de começar a outra orelha
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted) _playCurrentTestTone();
-      });
     } else {
-      // Terminou ambas
-      _finishTest();
+      // Terminou esta orelha. Volta para a escolha (o usuário decide se faz a
+      // outra ou finaliza) — fluxo explícito e fácil de acompanhar.
+      setState(() {
+        _completedEars.add(_currentEar);
+        _isTesting = false;
+        _earChosen = false;
+      });
     }
   }
 
@@ -179,9 +344,33 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
             colors: [Color(0xFF1E1E24), Color(0xFF0D0D0F)],
           ),
         ),
-        child: Column(
+        child: (!_earChosen && !_testFinished)
+            ? _buildEarChooser()
+            : Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            // Indicador grande do ouvido em teste (◀ esquerdo / direito ▶)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (_currentEar == EarSide.left)
+                  const Icon(Icons.volume_up, color: Colors.blueAccent, size: 28),
+                const SizedBox(width: 8),
+                Text(
+                  _currentEar == EarSide.left ? "◀  OUVIDO ESQUERDO" : "OUVIDO DIREITO  ▶",
+                  style: TextStyle(
+                    color: _currentEar == EarSide.left ? Colors.blueAccent : Colors.redAccent,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 18,
+                    letterSpacing: 1,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (_currentEar == EarSide.right)
+                  const Icon(Icons.volume_up, color: Colors.redAccent, size: 28),
+              ],
+            ),
+            const SizedBox(height: 24),
             // Container de Frequência Moderno
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
@@ -195,18 +384,10 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                   Text(
                     "${_frequencies[_currentFreqIndex]} Hz",
                     style: const TextStyle(
-                      fontSize: 64, 
-                      fontWeight: FontWeight.w800, 
+                      fontSize: 64,
+                      fontWeight: FontWeight.w800,
                       letterSpacing: -2,
                       color: Colors.white,
-                    ),
-                  ),
-                  Text(
-                    _currentEar == EarSide.left ? "Ouvido esquerdo" : "Ouvido direito",
-                    style: TextStyle(
-                      color: _currentEar == EarSide.left ? Colors.blueAccent : Colors.redAccent, 
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 2,
                     ),
                   ),
                 ],
@@ -226,47 +407,9 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 80),
-            
-            const SizedBox(height: 80),
-            
-            if (!_isTesting && !_testFinished) ...[
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 40),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
-                  border: Border.all(color: Colors.orange.withOpacity(0.5)),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.warning_amber_rounded, color: Colors.orange),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        "METODOLOGIA DE CALIBRAGEM:\nAtive o volume do PC/Celular em 100%. O som começará audível (40dB) e diminuirá a cada 'SIM'. Quando o som desaparecer e você clicar 'NÃO', o sistema registrará seu último limiar ouvido e passará para a próxima frequência.",
-                        style: TextStyle(color: Colors.orangeAccent, fontSize: 12),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: 250,
-                height: 60,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    elevation: 10,
-                  ),
-                  onPressed: _startFrequencyTest, 
-                  child: const Text("Começar o teste", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                ),
-              ),
-            ] else if (_testFinished) ...[
+            const SizedBox(height: 60),
+
+            if (_testFinished) ...[
               const Text(
                 "Resultado do teste", 
                 style: TextStyle(fontSize: 18, color: Colors.blueAccent, fontWeight: FontWeight.bold),

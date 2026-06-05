@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'home_screen.dart';
 
-/// AUTH SCREEN: Portal Industrial de Acesso [SEGURANÇA]
+/// Tela de entrada: simples e acolhedora (ver PRODUTO.md §5 e §7).
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
 
@@ -16,29 +16,34 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _isLoading = false;
   bool _isSignUp = false;
 
+  static const Color _bg = Color(0xFF101418);
+  static const Color _field = Color(0xFF1B2128);
+  static const Color _primary = Color(0xFF4F8DF7);
+  static const Color _textMain = Color(0xFFF2F4F7);
+  static const Color _textSoft = Color(0xFFB4BCC8);
+
   Future<void> _handleAuth() async {
     setState(() => _isLoading = true);
     final supabase = Supabase.instance.client;
 
     try {
       if (_isSignUp) {
-        // Registro de Novo Usuário
         final AuthResponse res = await supabase.auth.signUp(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
 
         if (res.user != null) {
-          // Criação Automática de Perfil [REGRA DE NEGÓCIO]
           await supabase.from('profiles').insert({
             'user_id': res.user!.id,
             'subscription_status': 'free',
             'created_at': DateTime.now().toIso8601String(),
           });
-          if (mounted) _showSnackbar("CONTA CRIADA COM SUCESSO. VERIFIQUE SEU E-MAIL.");
+          if (mounted) {
+            _showSnackbar("Conta criada! Verifique seu e-mail para confirmar.");
+          }
         }
       } else {
-        // Login Existente
         await supabase.auth.signInWithPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
@@ -50,42 +55,41 @@ class _AuthScreenState extends State<AuthScreen> {
         }
       }
     } catch (e) {
-      if (mounted) _showSnackbar("ERRO DE AUTENTICAÇÃO: ${e.toString().toUpperCase()}");
+      if (mounted) {
+        _showSnackbar("Não foi possível entrar. Confira seu e-mail e senha.");
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   void _showSnackbar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: const Color(0xFF1A1A1A),
-        content: Text(message, style: const TextStyle(color: Color(0xFF00FF41), fontFamily: 'monospace', fontSize: 10)),
-      ),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 40),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildLogo(),
-              const SizedBox(height: 50),
-              _buildTextField("IDENTIFICADOR (E-MAIL)", _emailController),
-              const SizedBox(height: 20),
-              _buildTextField("CHAVE DE ACESSO (SENHA)", _passwordController, obscure: true),
-              const SizedBox(height: 40),
-              _buildAuthButton(),
-              const SizedBox(height: 20),
-              _buildToggleMode(),
-            ],
+      backgroundColor: _bg,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildLogo(),
+                const SizedBox(height: 48),
+                _buildTextField("Seu e-mail", _emailController,
+                    keyboardType: TextInputType.emailAddress),
+                const SizedBox(height: 20),
+                _buildTextField("Sua senha", _passwordController, obscure: true),
+                const SizedBox(height: 32),
+                _buildAuthButton(),
+                const SizedBox(height: 12),
+                _buildToggleMode(),
+              ],
+            ),
           ),
         ),
       ),
@@ -96,30 +100,51 @@ class _AuthScreenState extends State<AuthScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("BOSYN NEURAL ENGINE", style: TextStyle(color: Colors.white24, fontSize: 10, letterSpacing: 4)),
+        const Icon(Icons.hearing, color: _primary, size: 56),
+        const SizedBox(height: 20),
+        Text(
+          _isSignUp ? "Vamos criar sua conta" : "Bem-vindo de volta",
+          style: const TextStyle(
+              color: _textMain, fontSize: 28, fontWeight: FontWeight.w800),
+        ),
         const SizedBox(height: 8),
-        Text(_isSignUp ? "INITIALIZING ID" : "TERMINAL ACCESS", 
-          style: const TextStyle(color: Color(0xFF00FF41), fontSize: 28, fontWeight: FontWeight.w900, fontFamily: 'monospace')),
-        Container(height: 2, width: 80, color: const Color(0xFF00FF41)),
+        Text(
+          _isSignUp
+              ? "É rápido. Depois preparamos tudo no seu ritmo."
+              : "Entre para continuar seu treino auditivo.",
+          style: const TextStyle(color: _textSoft, fontSize: 16, height: 1.4),
+        ),
       ],
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController controller, {bool obscure = false}) {
+  Widget _buildTextField(String label, TextEditingController controller,
+      {bool obscure = false, TextInputType? keyboardType}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: Colors.white38, fontSize: 8, letterSpacing: 2)),
+        Text(label,
+            style: const TextStyle(
+                color: _textSoft, fontSize: 15, fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         TextField(
           controller: controller,
           obscureText: obscure,
-          style: const TextStyle(color: Colors.white, fontFamily: 'monospace'),
+          keyboardType: keyboardType,
+          style: const TextStyle(color: _textMain, fontSize: 17),
           decoration: InputDecoration(
             filled: true,
-            fillColor: const Color(0xFF1A1A1A),
-            enabledBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.white12)),
-            focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Color(0xFF00FF41))),
+            fillColor: _field,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: _textSoft.withValues(alpha: 0.2)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: _primary, width: 2),
+            ),
           ),
         ),
       ],
@@ -129,18 +154,24 @@ class _AuthScreenState extends State<AuthScreen> {
   Widget _buildAuthButton() {
     return SizedBox(
       width: double.infinity,
-      height: 60,
+      height: 56,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF2563EB),
+          backgroundColor: _primary,
           foregroundColor: Colors.white,
-          shape: const BeveledRectangleBorder(),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
         onPressed: _isLoading ? null : _handleAuth,
-        child: _isLoading 
-          ? const CircularProgressIndicator(color: Colors.white)
-          : Text(_isSignUp ? "CONFIRMAR REGISTRO" : "SOLICITAR ACESSO", 
-              style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2)),
+        child: _isLoading
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                    color: Colors.white, strokeWidth: 2.5))
+            : Text(_isSignUp ? "Criar conta" : "Entrar",
+                style: const TextStyle(
+                    fontSize: 17, fontWeight: FontWeight.w600)),
       ),
     );
   }
@@ -150,8 +181,10 @@ class _AuthScreenState extends State<AuthScreen> {
       child: TextButton(
         onPressed: () => setState(() => _isSignUp = !_isSignUp),
         child: Text(
-          _isSignUp ? "JÁ POSSUI IDENTIFICADOR? LOGIN" : "NOVO OPERADOR? CRIAR CONTA",
-          style: const TextStyle(color: Colors.white24, fontSize: 10, fontFamily: 'monospace', decoration: TextDecoration.underline),
+          _isSignUp
+              ? "Já tem conta? Entrar"
+              : "Ainda não tem conta? Criar agora",
+          style: const TextStyle(color: _primary, fontSize: 15),
         ),
       ),
     );

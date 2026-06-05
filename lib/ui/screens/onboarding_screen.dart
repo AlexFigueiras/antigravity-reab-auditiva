@@ -19,15 +19,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   String? _mainDifficulty;
   bool? _usesHearingAid;
 
+  bool _saving = false;
+
   Future<void> _completeOnboarding() async {
+    if (_saving) return;
+    setState(() => _saving = true);
     final user = Supabase.instance.client.auth.currentUser;
     if (user != null) {
-      await Supabase.instance.client.from('profiles').update({
-        'onboarding_completed': true,
-        'age_range': _ageRange,
-        'main_difficulty': _mainDifficulty,
-        'uses_hearing_aid': _usesHearingAid,
-      }).eq('user_id', user.id);
+      // Não bloqueia a navegação se a rede falhar ou o perfil não existir:
+      // o onboarding sempre avança, mesmo offline.
+      try {
+        await Supabase.instance.client.from('profiles').update({
+          'onboarding_completed': true,
+          'age_range': _ageRange,
+          'main_difficulty': _mainDifficulty,
+          'uses_hearing_aid': _usesHearingAid,
+        }).eq('user_id', user.id).timeout(const Duration(seconds: 8));
+      } catch (e) {
+        debugPrint("Erro ao salvar onboarding (seguindo mesmo assim): $e");
+      }
     }
     if (mounted) {
       // Sugere o teste de audição logo após o onboarding — é a fundação da personalização
@@ -49,6 +59,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             await SupabaseService().saveAudiogram(audiogram);
           } catch (e) {
             debugPrint("Erro ao salvar audiograma do onboarding: $e");
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                      "Não consegui salvar o teste de audição. Verifique a conexão e refaça em Início."),
+                  duration: Duration(seconds: 5),
+                ),
+              );
+            }
           }
         }
       }
@@ -58,6 +77,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         );
       }
     }
+    if (mounted) setState(() => _saving = false);
   }
 
   @override

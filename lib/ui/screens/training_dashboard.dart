@@ -3,214 +3,346 @@ import 'package:provider/provider.dart';
 import '../../core/gamification_controller.dart';
 import '../../core/phoneme_map.dart';
 import '../../core/spatial_controller.dart';
+import '../../models/rehab_session.dart';
 import '../../services/audio_service_manager.dart';
+import '../../services/gatekeeper_service.dart';
 import '../../services/supabase_service.dart';
 import 'mission_report_screen.dart';
 import 'dart:math' as math;
 
-/// TRAINING DASHBOARD: Cockpit Industrial de Elite [ORQUESTRADOR]
+/// Tela de treino auditivo — focada num único módulo por vez.
+/// O [level] define qual exercício é treinado (2, 3 ou 4).
+/// Sem abas — o usuário entra aqui sabendo exatamente o que vai treinar.
 class TrainingDashboard extends StatefulWidget {
-  const TrainingDashboard({super.key});
+  final int level;
+  const TrainingDashboard({super.key, required this.level});
 
   @override
   State<TrainingDashboard> createState() => _TrainingDashboardState();
 }
 
-class _TrainingDashboardState extends State<TrainingDashboard> with SingleTickerProviderStateMixin {
-  late AnimationController _radarController;
-  int _currentLevel = 2;
+class _TrainingDashboardState extends State<TrainingDashboard>
+    with SingleTickerProviderStateMixin {
+  // Paleta calma (mesma da home).
+  static const _bg = Color(0xFF101418);
+  static const _card = Color(0xFF1B2128);
+  static const _primary = Color(0xFF4F8DF7);
+  static const _textMain = Color(0xFFF2F4F7);
+  static const _textSoft = Color(0xFFB4BCC8);
+  static const _correct = Color(0xFF3FB37F);
+
   bool _isTrainingActive = false;
-  
+
   // Estado do Exercício
   Map<String, dynamic>? _currentStimulus;
   double _extraBoost = 0.0;
   double _targetPanning = 0.0;
-  bool _isCorrectPulse = false;
-  int _sessionXP = 0; // Tracking local da sessão
   List<Map<String, dynamic>> _audiogramData = [];
+  bool _audiogramLoading = true;
+
+  // Rastreio da sessão (métricas reais — sem XP/pontos fake)
+  int _totalTrials = 0;
+  int _correctAnswers = 0;
+  final List<Map<String, dynamic>> _sessionLog = [];
+  final Stopwatch _trialStopwatch = Stopwatch();
+
+  // Embaralha qual botão (esquerda/direita) recebe o alvo, para o usuário
+  // não decorar a posição. Recalculado a cada novo estímulo.
+  bool _targetOnLeft = true;
+  // Feedback visual da última resposta ("Isso!" / "Quase — era ...").
+  String? _feedbackMsg;
+  bool _feedbackPositive = false;
+
+  // Animação de feedback
+  late AnimationController _feedbackAnim;
 
   @override
   void initState() {
     super.initState();
-    _radarController = AnimationController(
+    _feedbackAnim = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 400),
     );
     _loadAudiogram();
   }
 
   Future<void> _loadAudiogram() async {
     final audiogram = await SupabaseService().getLatestAudiogram();
-    if (audiogram == null) return;
+    if (audiogram == null) {
+      if (mounted) setState(() => _audiogramLoading = false);
+      return;
+    }
+    // Liga o motor de áudio nativo (Oboe) e carrega o audiograma para o ganho
+    // de meia-perda. SEM ISTO, _verifySecurityScope lança exceção e TODA fala
+    // sai muda — os bipes do teste de audição funcionam porque aquela tela
+    // inicializa o motor por conta própria.
+    await AudioServiceManager().initializeEngineForUser(audiogram);
     final data = <Map<String, dynamic>>[];
     for (final p in audiogram.leftEar) {
-      final right = audiogram.rightEar.where((r) => r.frequency == p.frequency).firstOrNull;
-      final avgThreshold = right != null ? (p.threshold + right.threshold) / 2 : p.threshold;
+      final right = audiogram.rightEar
+          .where((r) => r.frequency == p.frequency)
+          .firstOrNull;
+      final avgThreshold =
+          right != null ? (p.threshold + right.threshold) / 2 : p.threshold;
       data.add({'frequency': p.frequency, 'threshold': avgThreshold});
     }
-    if (mounted) setState(() => _audiogramData = data);
+    if (mounted) {
+      setState(() {
+        _audiogramData = data;
+        _audiogramLoading = false;
+      });
+    }
   }
 
   @override
   void dispose() {
-    _radarController.dispose();
+    _feedbackAnim.dispose();
     AudioServiceManager().forceStopAll();
     super.dispose();
   }
 
-  void _finishSession() async {
-    final gamification = context.read<GamificationController>();
-    try {
-      debugPrint("SESSÃO SINCRONIZADA: XP=$_sessionXP | SNR=${gamification.currentSNR}");
-    } catch (e) {
-      debugPrint("Erro na sincronização: $e");
-    }
+  // ---------------------------------------------------------------------------
+  // Títulos e descrições por nível
+  // ---------------------------------------------------------------------------
 
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => MissionReportScreen(
-          sessionXP: _sessionXP,
-          noiseThreshold: gamification.maxNoiseThreshold,
-        ),
-      ),
-    );
+  String get _title {
+    switch (widget.level) {
+      case 3:
+        return "De que lado vem o som";
+      case 4:
+        return "Entender no barulho";
+      default:
+        return "Distinguir sons";
+    }
   }
 
+  String get _description {
+    switch (widget.level) {
+      case 3:
+        return "Você vai ouvir um som e dizer de que lado ele veio: esquerda, centro ou direita.";
+      case 4:
+        return "Você vai ouvir uma palavra com barulho de fundo e escolher qual foi dita. Treina entender no meio do ruído.";
+      default:
+        return "Você vai ouvir uma palavra e escolher, entre duas parecidas, qual foi dita. Treina sons que se confundem.";
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Lógica do exercício (preservada do design anterior)
+  // ---------------------------------------------------------------------------
+
   void _startExercise() {
-    if (_currentLevel == 2) {
+    _trialStopwatch.reset();
+    if (widget.level == 2) {
       _startLevel2();
-    } else if (_currentLevel == 3) {
+    } else if (widget.level == 3) {
       _startLevel3();
     } else {
       _startLevel4();
     }
   }
 
+  void _newStimulusLayout() {
+    _targetOnLeft = math.Random().nextBool();
+    _feedbackMsg = null;
+  }
+
   void _startLevel2() {
     final controller = context.read<GamificationController>();
-    // Seleção Inteligente baseada no perfil clínico
     final phoneme = controller.getSmartPhoneme(_audiogramData);
-    
+
+    // Sem audiograma não há personalização — não treinamos "às cegas".
+    if (phoneme == null) {
+      _requireAudiogram();
+      return;
+    }
+
     setState(() {
       _currentStimulus = phoneme;
       _isTrainingActive = true;
       _extraBoost = 0.0;
       _targetPanning = 0.0;
+      _newStimulusLayout();
     });
+    _trialStopwatch.start();
     _playLevel2Stimulus();
+  }
+
+  /// Bloqueia o treino quando falta o teste de audição e explica o porquê,
+  /// em linguagem humana (honestidade clínica — PRODUTO.md §5).
+  void _requireAudiogram() {
+    if (!mounted) return;
+    setState(() => _isTrainingActive = false);
+    final msg = _audiogramLoading
+        ? "Carregando seu teste de audição… tente de novo em instantes."
+        : "Faça primeiro o teste de audição. É ele que escolhe os sons "
+            "certos para o seu treino — sem ele, não dá para personalizar.";
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), duration: const Duration(seconds: 5)),
+    );
   }
 
   void _startLevel4() {
     final controller = context.read<GamificationController>();
     final environments = ['RESTAURANTE', 'TRÂNSITO', 'VENTO'];
-    
+
+    final phoneme = controller.getSmartPhoneme(_audiogramData);
+    if (phoneme == null) {
+      _requireAudiogram();
+      return;
+    }
+
     setState(() {
-      _currentStimulus = controller.getSmartPhoneme(_audiogramData);
+      _currentStimulus = phoneme;
       _isTrainingActive = true;
+      _newStimulusLayout();
     });
-    
+
+    _trialStopwatch.start();
     AudioServiceManager().engine.playCocktailStimulus(
-      text: _currentStimulus!['target'],
-      snrDb: controller.currentSNR,
-      noiseEnvironment: environments[math.Random().nextInt(3)],
-      freqBand: (_currentStimulus!['freq_band'] as num).toDouble(),
-    );
+          text: _currentStimulus!['target'],
+          snrDb: controller.currentSNR,
+          noiseEnvironment: environments[math.Random().nextInt(3)],
+          freqBand: (_currentStimulus!['freq_band'] as num).toDouble(),
+        );
   }
 
   void _handleN2Choice(String choice) {
     if (_currentStimulus == null) return;
+    _trialStopwatch.stop();
     final controller = context.read<GamificationController>();
-    bool isCorrect = choice == _currentStimulus!['target'];
+    final target = _currentStimulus!['target'] as String;
+    final distractor = _currentStimulus!['distractor'] as String;
+    bool isCorrect = choice == target;
+
+    _totalTrials++;
+    if (isCorrect) _correctAnswers++;
+    _sessionLog.add({
+      'pair': '$target / $distractor',
+      'chosen': choice,
+      'correct': isCorrect,
+      'rt_ms': _trialStopwatch.elapsedMilliseconds,
+    });
 
     if (isCorrect) {
+      _feedbackAnim.forward(from: 0);
       setState(() {
-        _isCorrectPulse = true;
-        _sessionXP += 25;
-        controller.addAcuityXP(1.0, [_currentStimulus!['target'][0].toLowerCase()]);
-        _radarController.forward(from: 0).then((_) => _isCorrectPulse = false);
+        _feedbackMsg = "Isso! Você ouviu certo.";
+        _feedbackPositive = true;
+        controller.addAcuityXP(1.0, [target[0].toLowerCase()]);
       });
-      Future.delayed(const Duration(seconds: 2), _startLevel2);
+      Future.delayed(const Duration(milliseconds: 1100), () {
+        if (mounted) _startLevel2();
+      });
     } else {
       controller.consumeEnergy();
-      setState(() => _extraBoost += 3.0);
+      setState(() {
+        _extraBoost += 3.0;
+        _feedbackMsg = "Quase. A palavra era \"$target\". Ouça de novo.";
+        _feedbackPositive = false;
+      });
       _playLevel2Stimulus();
     }
   }
 
-  List<bool> _level4History = []; // Rastreador de regressão [INTELIGÊNCIA]
+  final List<bool> _level4History = [];
 
   void _handleN4Choice(String choice) {
     if (_currentStimulus == null) return;
+    _trialStopwatch.stop();
     final gamification = context.read<GamificationController>();
-    bool isCorrect = choice == _currentStimulus!['target'];
+    final target = _currentStimulus!['target'] as String;
+    final distractor = _currentStimulus!['distractor'] as String;
+    bool isCorrect = choice == target;
 
-    // Lógica de Regressão: Se acerto < 50% em 5 rodadas, regride para Nível 2
+    _totalTrials++;
+    if (isCorrect) _correctAnswers++;
+    _sessionLog.add({
+      'pair': '$target / $distractor',
+      'chosen': choice,
+      'correct': isCorrect,
+      'rt_ms': _trialStopwatch.elapsedMilliseconds,
+    });
+
     _level4History.add(isCorrect);
     if (_level4History.length > 5) _level4History.removeAt(0);
-    
+
     if (_level4History.length == 5) {
       int successCount = _level4History.where((val) => val).length;
       if (successCount < 3) {
-        debugPrint("REGRESSÃO CLÍNICA DETECTADA (<50%). RECALIBRANDO NO NÍVEL 2.");
+        debugPrint("REGRESSÃO CLÍNICA (<50%). Recalibrando.");
         setState(() {
-          _currentLevel = 2;
           _level4History.clear();
         });
-        _startLevel2();
-        return;
       }
     }
 
     gamification.addAcuityXP(isCorrect ? 1.0 : 0.0, ['cocktail']);
 
     if (isCorrect) {
+      _feedbackAnim.forward(from: 0);
       setState(() {
-        _isCorrectPulse = true;
-        _sessionXP += 50; // XP maior no Nível 4
+        _feedbackMsg = "Isso! Mesmo no barulho.";
+        _feedbackPositive = true;
       });
-      _radarController.forward(from: 0).then((_) => _isCorrectPulse = false);
-      Future.delayed(const Duration(seconds: 2), _startLevel4);
+      Future.delayed(const Duration(milliseconds: 1100), () {
+        if (mounted) _startLevel4();
+      });
     } else {
       gamification.consumeEnergy();
-      Future.delayed(const Duration(seconds: 1), _startLevel4);
+      setState(() {
+        _feedbackMsg = "Quase. A palavra era \"$target\".";
+        _feedbackPositive = false;
+      });
+      Future.delayed(const Duration(milliseconds: 1200), () {
+        if (mounted) _startLevel4();
+      });
     }
   }
 
   void _startLevel3() {
-    final stimuli = PHONEME_REHAB_DATA['level_2'] as List; // Reuso de fonemas agudos
+    final stimuli = PHONEME_REHAB_DATA['level_2'] as List;
     setState(() {
       _currentStimulus = stimuli[math.Random().nextInt(stimuli.length)];
-      // Sorteia pan: -1.0 (L), 0.0 (C), 1.0 (R)
       final options = [-1.0, 0.0, 1.0];
       _targetPanning = options[math.Random().nextInt(3)];
       _isTrainingActive = true;
+      _feedbackMsg = null;
     });
+    _trialStopwatch.start();
     _playLevel3Stimulus();
   }
 
   Future<void> _playLevel2Stimulus() async {
     if (_currentStimulus == null) return;
     await AudioServiceManager().engine.playPhonemicStimulus(
-      text: _currentStimulus!['target'],
-      freqBand: (_currentStimulus!['freq_band'] as num).toDouble(),
-      extraBoostDb: _extraBoost,
-    );
+          text: _currentStimulus!['target'],
+          freqBand: (_currentStimulus!['freq_band'] as num).toDouble(),
+          extraBoostDb: _extraBoost,
+        );
   }
 
   Future<void> _playLevel3Stimulus() async {
     if (_currentStimulus == null) return;
     await AudioServiceManager().engine.playSpatialStimulus(
-      text: _currentStimulus!['target'],
-      panning: _targetPanning,
-      freqBand: (_currentStimulus!['freq_band'] as num).toDouble(),
-    );
-    _radarController.forward(from: 0); // Efeito visual de PING no sonar
+          text: _currentStimulus!['target'],
+          panning: _targetPanning,
+          freqBand: (_currentStimulus!['freq_band'] as num).toDouble(),
+        );
   }
 
-
+  Future<void> _replayCurrent() async {
+    if (widget.level == 2) {
+      await _playLevel2Stimulus();
+    } else if (widget.level == 3) {
+      await _playLevel3Stimulus();
+    } else {
+      _startLevel4();
+    }
+  }
 
   void _handleN3Choice(double pannedAngle) {
+    _trialStopwatch.stop();
     final spatialController = context.read<SpatialController>();
     final gamification = context.read<GamificationController>();
 
@@ -220,41 +352,86 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
       phoneme: _currentStimulus?['target'] ?? "N/A",
     );
 
-    if (spatialController.lastAngularError < 0.1) {
-      gamification.addAcuityXP(1.5, ['spatial']); // XP bónus por localização
-      Future.delayed(const Duration(seconds: 2), _startLevel3);
+    final hit = spatialController.lastAngularError < 0.1;
+    _totalTrials++;
+    if (hit) _correctAnswers++;
+    final dirLabel = _targetPanning < 0
+        ? 'esquerda'
+        : _targetPanning > 0
+            ? 'direita'
+            : 'centro';
+    _sessionLog.add({
+      'direction': dirLabel,
+      'correct': hit,
+      'rt_ms': _trialStopwatch.elapsedMilliseconds,
+    });
+
+    if (hit) {
+      _feedbackAnim.forward(from: 0);
+    }
+    setState(() {
+      _feedbackMsg = hit ? "Isso! Lado certo." : "Quase. Ouça de novo.";
+      _feedbackPositive = hit;
+    });
+
+    if (hit) {
+      gamification.addAcuityXP(1.5, ['spatial']);
+      Future.delayed(const Duration(milliseconds: 1100), () {
+        if (mounted) _startLevel3();
+      });
     } else {
       gamification.consumeEnergy();
-      Future.delayed(const Duration(seconds: 1), _playLevel3Stimulus);
+      Future.delayed(const Duration(milliseconds: 1000), () {
+        if (mounted) _playLevel3Stimulus();
+      });
     }
   }
+
+  /// Monta a explicação do som ("o porquê"), derivada do alvo.
+  /// Ex.: alvo "Dedo" -> "Som do D — como em dedo".
+  String _soundExplanation() {
+    final target = (_currentStimulus?['target'] as String?) ?? '';
+    if (target.isEmpty) return '';
+    final letter = target[0].toUpperCase();
+    return "Som do $letter — como em \"${target.toLowerCase()}\".";
+  }
+
+  // ---------------------------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
+      backgroundColor: _bg,
+      appBar: AppBar(
+        backgroundColor: _bg,
+        elevation: 0,
+        centerTitle: true,
+        title: Text(
+          _title,
+          style: const TextStyle(
+              color: _textMain, fontSize: 20, fontWeight: FontWeight.w600),
+        ),
+        iconTheme: const IconThemeData(color: _textMain),
+      ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(20.0),
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
           child: Column(
             children: [
-              _buildHeader(),
-              const SizedBox(height: 15),
-              _buildLevelSelector(),
-              const SizedBox(height: 15),
-              _buildNeuralEnergyBar(),
-              const SizedBox(height: 20),
-              if (_currentLevel == 4) _buildSNRMeter(),
-              const SizedBox(height: 20),
+              // Indicador de sessão (acertos/tentativas)
+              if (_isTrainingActive) _buildSessionIndicator(),
+              const SizedBox(height: 12),
               Expanded(
                 child: Center(
-                  child: _isTrainingActive 
-                    ? (_currentLevel == 2 ? _buildLevel2UI() : (_currentLevel == 3 ? _buildLevel3UI() : _buildLevel4UI())) 
-                    : _buildStandbyPanel(),
+                  child: _isTrainingActive
+                      ? _buildActiveExercise()
+                      : _buildStandby(),
                 ),
               ),
-              const SizedBox(height: 20),
-              _buildControlPanel(),
+              const SizedBox(height: 12),
+              _buildBottomBar(),
             ],
           ),
         ),
@@ -262,296 +439,375 @@ class _TrainingDashboardState extends State<TrainingDashboard> with SingleTicker
     );
   }
 
-  Widget _buildLevelSelector() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
+  Widget _buildSessionIndicator() {
+    final accuracy = _totalTrials > 0
+        ? (_correctAnswers / _totalTrials * 100).toStringAsFixed(0)
+        : '--';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+      decoration: BoxDecoration(
+        color: _card,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.check_circle_outline, color: _correct, size: 20),
+          const SizedBox(width: 8),
+          Text(
+            "$_correctAnswers/$_totalTrials acertos",
+            style: const TextStyle(
+                color: _textMain, fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(width: 16),
+          Text(
+            "$accuracy%",
+            style: TextStyle(
+                color: _totalTrials > 0 ? _primary : _textSoft,
+                fontSize: 16,
+                fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStandby() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.headphones_rounded, color: _textSoft, size: 72),
+        const SizedBox(height: 24),
+        Text(
+          _description,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+              color: _textSoft, fontSize: 18, height: 1.5),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          "Coloque os fones para começar.",
+          textAlign: TextAlign.center,
+          style: TextStyle(color: _textSoft, fontSize: 15),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActiveExercise() {
+    switch (widget.level) {
+      case 3:
+        return _buildSpatialExercise();
+      default:
+        return _buildWordChoiceExercise(); // níveis 2 e 4
+    }
+  }
+
+  /// Níveis 2 e 4: ouve 1 palavra, escolhe entre 2 botões grandes.
+  Widget _buildWordChoiceExercise() {
+    if (_currentStimulus == null) return const SizedBox.shrink();
+    final target = _currentStimulus!['target'] as String;
+    final distractor = _currentStimulus!['distractor'] as String;
+    final isN4 = widget.level == 4;
+
+    final leftWord = _targetOnLeft ? target : distractor;
+    final rightWord = _targetOnLeft ? distractor : target;
+    final onChoice = isN4 ? _handleN4Choice : _handleN2Choice;
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        // Faixa fixa: o "porquê" do treino.
+        _explanationBanner(),
+        const SizedBox(height: 28),
+
+        // Botão "Ouvir de novo" — central, grande.
+        _replayButton(),
+        const SizedBox(height: 16),
+        const Text("Qual palavra você ouviu?",
+            style: TextStyle(color: _textSoft, fontSize: 17)),
+        const SizedBox(height: 20),
+
+        Row(
+          children: [
+            _wordButton(leftWord, () => onChoice(leftWord)),
+            const SizedBox(width: 14),
+            _wordButton(rightWord, () => onChoice(rightWord)),
+          ],
+        ),
+
+        const SizedBox(height: 20),
+        _feedbackArea(),
+      ],
+    );
+  }
+
+  Widget _explanationBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      decoration: BoxDecoration(
+        color: _card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _primary.withValues(alpha: 0.35)),
+      ),
       child: Row(
         children: [
-          _levelTab(2, "Sons parecidos"),
-          const SizedBox(width: 8),
-          _levelTab(3, "De que lado"),
-          const SizedBox(width: 8),
-          _levelTab(4, "No barulho"),
-        ],
-      ),
-    );
-  }
-
-  Widget _levelTab(int level, String label) {
-    bool isSelected = _currentLevel == level;
-    return InkWell(
-      onTap: () => setState(() {
-        _currentLevel = level;
-        _isTrainingActive = false;
-        AudioServiceManager().forceStopAll();
-      }),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          border: Border.all(color: isSelected ? const Color(0xFF00FF41) : Colors.white12),
-          color: isSelected ? const Color(0xFF00FF41).withOpacity(0.05) : Colors.transparent,
-        ),
-        child: Center(
-          child: Text(label, style: TextStyle(color: isSelected ? const Color(0xFF00FF41) : Colors.white38, fontSize: 8, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLevel4UI() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _buildSonarDisplay(isPulse: _isCorrectPulse),
-        const SizedBox(height: 40),
-        Row(
-          children: [
-            _buildIndustrialButton(_currentStimulus!['target'], () => _handleN4Choice(_currentStimulus!['target'])),
-            const SizedBox(width: 15),
-            _buildIndustrialButton(_currentStimulus!['distractor'], () => _handleN4Choice(_currentStimulus!['distractor'])),
-          ],
-        ),
-        const SizedBox(height: 20),
-        _buildPanicButton(),
-      ],
-    );
-  }
-
-  Widget _buildSNRMeter() {
-    final snr = context.watch<GamificationController>().currentSNR;
-    bool isCritical = snr <= 4.0;
-    
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: isCritical ? const Color(0xFFE11D48).withOpacity(0.1) : const Color(0xFF1A1A1A),
-        border: Border.all(color: isCritical ? const Color(0xFFE11D48) : const Color(0xFF333333)),
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text("Barulho de fundo", style: TextStyle(color: Colors.white38, fontSize: 8)),
-              Text("${snr.toStringAsFixed(1)} dB", style: TextStyle(color: isCritical ? const Color(0xFFE11D48) : const Color(0xFF00FF41), fontFamily: 'monospace', fontSize: 16, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          const SizedBox(height: 5),
-          LinearProgressIndicator(
-            value: (snr + 10) / 30, // Normalizado
-            backgroundColor: Colors.white12,
-            valueColor: AlwaysStoppedAnimation(isCritical ? const Color(0xFFE11D48) : const Color(0xFF00FF41)),
-            minHeight: 2.0,
+          const Icon(Icons.lightbulb_outline, color: _primary, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _soundExplanation(),
+              style: const TextStyle(
+                  color: _textMain, fontSize: 16, height: 1.35),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildPanicButton() {
-    return TextButton(
-      onPressed: () {
-        context.read<GamificationController>().resetSNR();
-        AudioServiceManager().forceStopAll();
-        _startLevel4();
-      },
-      child: const Text("Recomeçar mais fácil", style: TextStyle(color: Color(0xFFFFBF00), fontSize: 10, fontFamily: 'monospace', decoration: TextDecoration.underline)),
+  Widget _replayButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 64,
+      child: ElevatedButton.icon(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _primary,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16)),
+        ),
+        onPressed: _replayCurrent,
+        icon: const Icon(Icons.volume_up_rounded, size: 28),
+        label: const Text("Ouvir de novo",
+            style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600)),
+      ),
     );
   }
 
-  Widget _buildLevel2UI() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _buildSonarDisplay(isPulse: _isCorrectPulse),
-        const SizedBox(height: 40),
-        Row(
+  Widget _wordButton(String label, VoidCallback onTap) {
+    return Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          height: 92,
+          decoration: BoxDecoration(
+            color: _card,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white12, width: 1.5),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                color: _textMain,
+                fontSize: 26,
+                fontWeight: FontWeight.w700),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _feedbackArea() {
+    if (_feedbackMsg == null) {
+      return const SizedBox(height: 28);
+    }
+    final color = _feedbackPositive ? _correct : const Color(0xFFE6A23C);
+    return FadeTransition(
+      opacity: _feedbackPositive
+          ? _feedbackAnim.drive(CurveTween(curve: Curves.easeOut))
+          : const AlwaysStoppedAnimation(1.0),
+      child: ScaleTransition(
+        scale: _feedbackPositive
+            ? _feedbackAnim.drive(
+                Tween(begin: 0.8, end: 1.0)
+                    .chain(CurveTween(curve: Curves.elasticOut)),
+              )
+            : const AlwaysStoppedAnimation(1.0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _buildIndustrialButton(_currentStimulus!['target'], () => _handleN2Choice(_currentStimulus!['target'])),
-            const SizedBox(width: 15),
-            _buildIndustrialButton(_currentStimulus!['distractor'], () => _handleN2Choice(_currentStimulus!['distractor'])),
+            Icon(
+                _feedbackPositive
+                    ? Icons.check_circle_rounded
+                    : Icons.refresh_rounded,
+                color: color,
+                size: 24),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                _feedbackMsg!,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: color, fontSize: 17, fontWeight: FontWeight.w600),
+              ),
+            ),
           ],
         ),
-      ],
+      ),
     );
   }
 
-  Widget _buildLevel3UI() {
+  /// Nível 3: de que lado veio o som.
+  Widget _buildSpatialExercise() {
     return Consumer<SpatialController>(
       builder: (context, spatial, child) {
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _buildSonarDisplay(isPulse: true, angle: _targetPanning),
-            const SizedBox(height: 20),
-            Text(spatial.statusMessage, style: const TextStyle(color: Color(0xFF00FF41), fontFamily: 'monospace', fontSize: 10)),
-            const SizedBox(height: 30),
+            _replayButton(),
+            const SizedBox(height: 24),
+            const Text("De que lado veio o som?",
+                style: TextStyle(color: _textSoft, fontSize: 18)),
+            const SizedBox(height: 24),
             Row(
               children: [
-                _buildIndustrialButton("Esquerda", () => _handleN3Choice(-1.0)),
+                _sideButton("Esquerda", Icons.arrow_back_rounded,
+                    () => _handleN3Choice(-1.0)),
                 const SizedBox(width: 10),
-                _buildIndustrialButton("Centro", () => _handleN3Choice(0.0)),
+                _sideButton("Centro", Icons.circle_outlined,
+                    () => _handleN3Choice(0.0)),
                 const SizedBox(width: 10),
-                _buildIndustrialButton("Direita", () => _handleN3Choice(1.0)),
+                _sideButton("Direita", Icons.arrow_forward_rounded,
+                    () => _handleN3Choice(1.0)),
               ],
             ),
+            const SizedBox(height: 20),
+            _feedbackArea(),
           ],
         );
       },
     );
   }
 
-  Widget _buildIndustrialButton(String label, VoidCallback onTap) {
+  Widget _sideButton(String label, IconData icon, VoidCallback onTap) {
     return Expanded(
       child: InkWell(
+        borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Container(
-          height: 60,
-          decoration: BoxDecoration(color: const Color(0xFF1A1A1A), border: Border.all(color: const Color(0xFF333333))),
-          child: Center(child: Text(label, style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 14))),
+          height: 100,
+          decoration: BoxDecoration(
+            color: _card,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white12, width: 1.5),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: _primary, size: 30),
+              const SizedBox(height: 8),
+              Text(label,
+                  style: const TextStyle(
+                      color: _textMain,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600)),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildSonarDisplay({bool isPulse = false, double angle = 0.0}) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        AnimatedBuilder(
-          animation: _radarController,
-          builder: (context, child) {
-            return CustomPaint(
-              size: const Size(250, 250),
-              painter: SonarPainter(_radarController.value, angle, isPulse),
-            );
-          },
-        ),
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text("${_currentStimulus?['freq_band'] ?? 0} HZ", style: const TextStyle(color: Color(0xFF00FF41), fontSize: 22, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
-            const Text("Ouça e escolha", style: TextStyle(color: Colors.white24, fontSize: 8)),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildHeader() {
-    return Consumer<GamificationController>(
-      builder: (context, controller, child) {
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text("Seu nível", style: TextStyle(color: Colors.white38, fontSize: 10)),
-              Text(controller.acuityLevel, style: const TextStyle(color: Color(0xFF00FF41), fontSize: 20, fontFamily: 'monospace')),
-            ]),
-            _buildStatCard("XP", controller.totalXP.toString()),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildStatCard(String label, String value) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: const Color(0xFF1A1A1A), border: Border.all(color: const Color(0xFF333333))),
-      child: Column(children: [
-        Text(label, style: const TextStyle(color: Colors.white38, fontSize: 8)),
-        Text(value, style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 16)),
-      ]),
-    );
-  }
-
-  Widget _buildNeuralEnergyBar() {
-    final controller = context.watch<GamificationController>();
-    return Row(
-      children: List.generate(5, (index) => Expanded(
-        child: Container(
-          height: 6,
-          margin: const EdgeInsets.symmetric(horizontal: 1),
-          color: index < controller.neuralEnergy ? const Color(0xFF00FF41) : Colors.white12,
-        ),
-      )),
-    );
-  }
-
-  Widget _buildStandbyPanel() {
-    return const Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.hearing, color: Colors.white10, size: 80),
-        SizedBox(height: 20),
-        Text("Pronto para começar", style: TextStyle(color: Colors.white24, fontFamily: 'monospace', letterSpacing: 5)),
-      ],
-    );
-  }
-
-  Widget _buildControlPanel() {
+  Widget _buildBottomBar() {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (context.watch<GamificationController>().neuralEnergy <= 2)
+        if (context.watch<GamificationController>().neuralEnergy <= 2 &&
+            _isTrainingActive)
           const Padding(
-            padding: EdgeInsets.only(bottom: 10),
+            padding: EdgeInsets.only(bottom: 12),
             child: Text(
               "Bom esforço! Pode continuar ou voltar amanhã.",
-              style: TextStyle(color: Color(0xFFFFBF00), fontSize: 12),
+              style: TextStyle(color: Color(0xFFE6A23C), fontSize: 14),
               textAlign: TextAlign.center,
             ),
           ),
         SizedBox(
           width: double.infinity,
-          height: 50,
+          height: 56,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: _isTrainingActive ? const Color(0xFFE11D48) : const Color(0xFF2563EB),
-              shape: const BeveledRectangleBorder(),
+              backgroundColor: _isTrainingActive
+                  ? const Color(0xFF2A323C)
+                  : _primary,
+              foregroundColor:
+                  _isTrainingActive ? _textSoft : Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
             ),
-            onPressed: () => _isTrainingActive ? setState(() => _isTrainingActive = false) : _startExercise(),
-            child: Text(_isTrainingActive ? "Parar" : "Começar o treino"),
+            onPressed: () => _isTrainingActive
+                ? _stopAndReport()
+                : _startExercise(),
+            child: Text(
+              _isTrainingActive ? "Encerrar treino" : "Começar o treino",
+              style: const TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.w600),
+            ),
           ),
         ),
       ],
     );
   }
-}
 
-class SonarPainter extends CustomPainter {
-  final double progress;
-  final double angle;
-  final bool isPulse;
-  SonarPainter(this.progress, this.angle, this.isPulse);
+  Future<void> _stopAndReport() async {
+    setState(() => _isTrainingActive = false);
+    AudioServiceManager().forceStopAll();
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2;
-    
-    // Grades do Sonar
-    final paint = Paint()..color = Colors.white.withOpacity(0.05)..style = PaintingStyle.stroke;
-    canvas.drawCircle(center, radius, paint);
-    canvas.drawCircle(center, radius * 0.6, paint);
-    
-    // Linha de Panning
-    final linePaint = Paint()..color = const Color(0xFF00FF41).withOpacity(0.2)..strokeWidth = 1.0;
-    canvas.drawLine(center, center + Offset(angle * radius, -math.sqrt(radius*radius - (angle*radius)*(angle*radius))), linePaint);
+    // Salva sessão real no Supabase (métrica clínica, não XP de videogame)
+    final accuracy = _totalTrials > 0
+        ? (_correctAnswers / _totalTrials * 100)
+        : 0.0;
+    final avgRt = _sessionLog.isNotEmpty
+        ? _sessionLog
+                .map((e) => (e['rt_ms'] as int?) ?? 0)
+                .reduce((a, b) => a + b) /
+            _sessionLog.length
+        : 0.0;
 
-    if (isPulse && progress > 0) {
-      final pulsePaint = Paint()
-        ..color = const Color(0xFF00FF41).withOpacity(1.0 - progress)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 4.0;
-      
-      // Ping na direção do ângulo
-      final pingPos = center + Offset(angle * radius, -math.sqrt(radius*radius - (angle*radius)*(angle*radius)) * 0.8);
-      canvas.drawCircle(pingPos, 30 * progress, pulsePaint);
+    try {
+      final user = await SupabaseService().getLatestAudiogram();
+      final patientId = user?.patientId ?? 'local';
+      final rehabLevel = RehabLevel.values.firstWhere(
+        (e) => e.value == widget.level,
+        orElse: () => RehabLevel.phonemicDiscrimination,
+      );
+
+      final gamification = context.read<GamificationController>();
+      final session = RehabSession(
+        patientId: patientId,
+        date: DateTime.now(),
+        level: rehabLevel,
+        totalTrials: _totalTrials,
+        correctAnswers: _correctAnswers,
+        averageResponseTimeMs: avgRt,
+        metadata: {
+          'log': _sessionLog,
+          if (widget.level == 4) 'srt': gamification.currentSNR,
+        },
+      );
+      await SupabaseService().saveRehabSession(session);
+
+      // Invalida cache do gatekeeper para reavaliar desbloqueios
+      GatekeeperService().invalidateCache();
+    } catch (e) {
+      debugPrint("Erro ao salvar sessão: $e");
     }
-  }
 
-  @override
-  bool shouldRepaint(SonarPainter oldDelegate) => true;
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MissionReportScreen(
+          totalTrials: _totalTrials,
+          correctAnswers: _correctAnswers,
+          level: widget.level,
+          sessionLog: _sessionLog,
+        ),
+      ),
+    );
+  }
 }

@@ -46,10 +46,11 @@ public:
         if (!shouldPlay) return 0.0f;
 
         float sample = (float)(std::sin(phase) * amplitude);
-        
-        // Só incrementamos a fase no último canal para manter sincronia
-        // Mas como somos Mono no Oboe por enquanto (OboeEngine.cpp:25: count: Mono), não faz diferença.
-        // No entanto, se o OboeEngine mudar para Stereo, isso é importante.
+
+        // O stream é estéreo (oboe_engine.cpp: ChannelCount::Stereo). A fase é
+        // avançada uma vez por frame em updatePhase() (chamado após os 2 canais),
+        // então os canais L/R ficam em fase. O isolamento por orelha vem do
+        // shouldPlay acima — essencial para o teste audiométrico.
         return sample;
     }
 

@@ -2,9 +2,8 @@ import 'dart:math' as math;
 import 'dart:io';
 import 'dart:ffi' as ffi;
 import 'package:ffi/ffi.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/audiogram.dart';
-import '../services/tts_service.dart';
+import '../services/system_tts_service.dart';
 import 'package:flutter/foundation.dart';
 import 'native_engine.dart';
 
@@ -16,15 +15,53 @@ class AudioRehabEngine {
   Audiogram? _currentAudiogram;
 
   final _nativeBridge = NativeDSPBridge();
-  late final GoogleTTSService _tts;
+  late final SystemTtsService _tts;
 
   // Calibração: 0dB HL -> 0.0001 linear. 80dB HL -> 1.0 linear.
   static const double _kRefDb = 80.0;
   static const double _fs = 48000.0; // Sample Rate padrão do Engine
 
   AudioRehabEngine._internal() {
-    final apiKey = dotenv.env['GOOGLE_TTS_API_KEY'] ?? '';
-    _tts = GoogleTTSService(apiKey);
+    // Voz das palavras: motor TTS nativo do dispositivo (offline, gratuito).
+    // O WAV sintetizado entra no mesmo pipeline DSP (ganho de meia-perda).
+    _tts = SystemTtsService();
+  }
+
+  /// Sintetiza a fala e devolve as amostras já reamostradas para [_fs].
+  /// Centraliza o caminho TTS -> WAV -> Float32 -> (resample) usado por todos
+  /// os estímulos de fala, garantindo tom e velocidade corretos no DSP.
+  Future<Float32List> _synthesizeSpeechSamples(String text) async {
+    final speech = await _tts.synthesize(text);
+    final bytes = await File(speech.path).readAsBytes();
+    final raw = _convertInt16ToFloat32(bytes);
+    final resampled = _resampleTo(raw, speech.sampleRate, _fs.toInt());
+    double peak = 0.0;
+    for (final s in resampled) {
+      final a = s.abs();
+      if (a > peak) peak = a;
+    }
+    debugPrint("[TTS_DIAG] '$text' file=${speech.path} bytes=${bytes.length} "
+        "srcRate=${speech.sampleRate} rawSamples=${raw.length} "
+        "outSamples=${resampled.length} peak=${peak.toStringAsFixed(4)}");
+    return resampled;
+  }
+
+  /// Reamostragem linear para [targetRate]. Necessária porque o TTS do
+  /// sistema costuma gerar 22050 Hz, enquanto o DSP nativo opera a 48 kHz —
+  /// sem isso, a voz tocaria em tom/velocidade errados.
+  Float32List _resampleTo(Float32List input, int srcRate, int targetRate) {
+    if (srcRate == targetRate || input.isEmpty) return input;
+    final ratio = targetRate / srcRate;
+    final outLen = (input.length * ratio).floor();
+    final out = Float32List(outLen);
+    for (int i = 0; i < outLen; i++) {
+      final srcPos = i / ratio;
+      final i0 = srcPos.floor();
+      final i1 = (i0 + 1 < input.length) ? i0 + 1 : i0;
+      final frac = srcPos - i0;
+      out[i] = input[i0] * (1.0 - frac) + input[i1] * frac;
+    }
+    return out;
   }
 
   Future<void> restartHardwareAudio() async {
@@ -71,20 +108,23 @@ class AudioRehabEngine {
     double extraBoostDb = 0.0,
   }) async {
     _verifySecurityScope();
-    
+
+    // 0. Centraliza o panning. Sem isto, a fala herdaria o panning do último
+    //    teste de audição (±1.0), que zera um dos canais e deixa a voz
+    //    inaudível se o fone estiver no lado oposto. Fala = binaural (centro).
+    _nativeBridge.setTargetPanning(0.0);
+
     // 1. Calcula Ganho Clínico (Shelf Gain)
     double clinicalGainDb = getCompensatoryGain(freqBand) + extraBoostDb;
-    
-    // 2. Síntese de Fala
-    final path = await _tts.synthesize(text);
-    final bytes = await File(path).readAsBytes();
-    Float32List samples = _convertInt16ToFloat32(bytes);
-    
+
+    // 2. Síntese de Fala (TTS nativo -> WAV -> amostras a 48 kHz)
+    final samples = await _synthesizeSpeechSamples(text);
+
     // 3. (Removido: High-Shelf Filter em Dart. O processamento agora é 100% nativo)
-    
+
     // 4. Carrega e executa no Native DSP
     _loadSampleToNative(samples, isTarget: true);
-    
+
     print("ESTÍMULO N2: '$text' | Freq: $freqBand Hz | Gain EQ: +$clinicalGainDb dB");
   }
 
@@ -101,14 +141,12 @@ class AudioRehabEngine {
     
     // 2. Aplica EQ de Meio Ganho (Otimizado p/ agudos)
     double gainDb = getCompensatoryGain(freqBand);
-    
-    final path = await _tts.synthesize(text);
-    final bytes = await File(path).readAsBytes();
-    Float32List samples = _convertInt16ToFloat32(bytes);
-    
+
+    final samples = await _synthesizeSpeechSamples(text);
+
     // 4. Carrega no Mixer
     _loadSampleToNative(samples, isTarget: true);
-    
+
     print("ESTÍMULO ESPACIAL: '$text' | Pan: $panning | EQ: +$gainDb dB");
   }
 
@@ -144,6 +182,9 @@ class AudioRehabEngine {
   }) async {
     _verifySecurityScope();
 
+    // 0. Centraliza o panning (fala binaural — ver playPhonemicStimulus).
+    _nativeBridge.setTargetPanning(0.0);
+
     // 1. Configura Intensidade do Ruído Camada 2 ( SNR )
     // A cada +2dB de ruído, o valor linear sobe
     double noiseIntensity = math.pow(10, (-snrDb) / 20).toDouble();
@@ -151,13 +192,11 @@ class AudioRehabEngine {
 
     // 2. Aplica EQ Clínico no Alvo (Camada 1)
     // 3. Síntese
-    final path = await _tts.synthesize(text);
-    final bytes = await File(path).readAsBytes();
-    Float32List samples = _convertInt16ToFloat32(bytes);
+    final samples = await _synthesizeSpeechSamples(text);
 
     // 4. Carrega no motor nativo
     _loadSampleToNative(samples, isTarget: true);
-    
+
     print("MISTURA COQUETEL: ENV=$noiseEnvironment | SNR=$snrDb dB | Vol Ruído=$noiseIntensity");
   }
 
@@ -206,7 +245,11 @@ class AudioRehabEngine {
     );
   }
 
-  /// CALIBRAÇÃO: Tom senoidal puro para ajuste de hardware (Alias para ThresholdTest)
+  /// TESTE AUDIOMÉTRICO: Tom puro isolado por orelha.
+  ///
+  /// O target player é mono; a separação L/R vem do panning aplicado no mixer
+  /// nativo: panning -1.0 zera o ganho do canal direito e 1.0 zera o esquerdo
+  /// (ver oboe_engine.cpp). Assim o tom soa apenas no ouvido testado.
   Future<void> playPureTone({
     required int frequencyHz,
     required int durationMs,
@@ -218,7 +261,7 @@ class AudioRehabEngine {
     // 1. Gera Senoide
     final int numSamples = (durationMs / 1000.0 * _fs).toInt();
     final Float32List samples = Float32List(numSamples);
-    
+
     // Nível Linear: 10^((dB HL - Ref) / 20)
     double amplitude = math.pow(10, (dbLevel - _kRefDb) / 20).toDouble();
 
@@ -226,7 +269,7 @@ class AudioRehabEngine {
       samples[i] = amplitude * math.sin(2 * math.pi * frequencyHz * i / _fs);
     }
 
-    // 2. Configura Panning (L/R)
+    // 2. Configura Panning (L/R) ANTES de carregar o sample.
     double targetPanning = 0.0;
     if (ear == EarSide.left) targetPanning = -1.0;
     if (ear == EarSide.right) targetPanning = 1.0;
@@ -234,7 +277,7 @@ class AudioRehabEngine {
 
     // 3. Carrega no motor nativo
     _loadSampleToNative(samples, isTarget: true);
-    
+
     print("PURE TONE: $frequencyHz Hz | $dbLevel dB | Ear: $ear");
   }
 

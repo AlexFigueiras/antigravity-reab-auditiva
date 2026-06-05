@@ -31,13 +31,31 @@ class GamificationController extends ChangeNotifier {
   double get maxNoiseThreshold => _maxNoiseThreshold;
 
   /// Seleção Inteligente baseada no Audiograma [Fase 1]
+  ///
+  /// Retorna `null` quando **não há audiograma** — neste caso o app NÃO pode
+  /// personalizar e não deve fingir que personaliza (honestidade clínica, §5).
+  /// Quem chama deve tratar o null pedindo o teste de audição.
+  ///
+  /// Com audiograma, prioriza os pares mínimos cujo som distintivo vive nas
+  /// faixas de frequência onde a pessoa tem perda > 25 dB HL. Se nenhuma faixa
+  /// crítica casar com os estímulos disponíveis, cai num estímulo do nível
+  /// (a perda existe, mas fora das bandas mapeadas) — aí o sorteio é legítimo.
   Map<String, dynamic>? getSmartPhoneme(List<dynamic> audiogramData) {
-    final List<Map<String, dynamic>> level2Stimuli = List<Map<String, dynamic>>.from(PHONEME_REHAB_DATA['level_2']);
+    // Sem dados clínicos -> não há personalização possível.
+    if (audiogramData.isEmpty) return null;
+
+    final List<Map<String, dynamic>> level2Stimuli =
+        List<Map<String, dynamic>>.from(PHONEME_REHAB_DATA['level_2']);
 
     // Filtra frequências com perda > 25dB
-    final criticalFreqs = audiogramData.where((p) => (p['threshold'] as num) > 25).map((p) => p['frequency'] as int).toList();
+    final criticalFreqs = audiogramData
+        .where((p) => (p['threshold'] as num) > 25)
+        .map((p) => p['frequency'] as int)
+        .toList();
 
-    if (criticalFreqs.isEmpty) return level2Stimuli[math.Random().nextInt(level2Stimuli.length)];
+    if (criticalFreqs.isEmpty) {
+      return level2Stimuli[math.Random().nextInt(level2Stimuli.length)];
+    }
 
     // Filtra fonemas na faixa de +/- 1500Hz das frequências críticas
     final smartMatch = level2Stimuli.where((s) {
@@ -45,7 +63,9 @@ class GamificationController extends ChangeNotifier {
       return criticalFreqs.any((f) => (band - f).abs() <= 1500);
     }).toList();
 
-    if (smartMatch.isEmpty) return level2Stimuli[math.Random().nextInt(level2Stimuli.length)];
+    if (smartMatch.isEmpty) {
+      return level2Stimuli[math.Random().nextInt(level2Stimuli.length)];
+    }
     return smartMatch[math.Random().nextInt(smartMatch.length)];
   }
 

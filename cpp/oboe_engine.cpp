@@ -36,32 +36,24 @@ bool OboeEngine::start() {
     if (outputStream) return true; // Já está rodando [IDEMPOTENTE]
 
     oboe::AudioStreamBuilder builder;
-    
-    // 1. OBRIGAÇÃO DA ENGENHARIA: 48kHz (Acesso Direto ao Mixer nativo do Android OS)
     builder.setSampleRate(48000);
-    
-    // 2. OBRIGAÇÃO DE LATÊNCIA: < 20ms
     builder.setPerformanceMode(oboe::PerformanceMode::LowLatency);
     builder.setSharingMode(oboe::SharingMode::Exclusive);
-    
-    // Configurações Físicas
     builder.setFormat(oboe::AudioFormat::Float);
     builder.setChannelCount(oboe::ChannelCount::Stereo);
+    builder.setUsage(oboe::Usage::Media);
+    builder.setContentType(oboe::ContentType::Music);
     builder.setDirection(oboe::Direction::Output);
-    
-    // 3. Thread Nativa para impedir bloqueio à UI
     builder.setCallback(this);
 
     oboe::Result result = builder.openStream(outputStream);
-    
-    if (result == oboe::Result::OK) {
-        // Double buffering rule
-        outputStream->setBufferSizeInFrames(outputStream->getFramesPerBurst() * 2);
-        
-        result = outputStream->requestStart();
-        if (result == oboe::Result::OK) return true;
-    }
-    return false;
+    if (result != oboe::Result::OK) return false;
+
+    // Double buffering rule
+    outputStream->setBufferSizeInFrames(outputStream->getFramesPerBurst() * 2);
+
+    result = outputStream->requestStart();
+    return result == oboe::Result::OK;
 }
 
 void OboeEngine::stop() {
@@ -101,8 +93,10 @@ oboe::DataCallbackResult OboeEngine::onAudioReady(
     }
 
     float *floatData = static_cast<float *>(audioData);
-    
-    bool hasStimulusInBlock = false;
+
+    // Usa o número REAL de canais concedidos pelo stream (não assume estéreo).
+    // Evita overflow de buffer em streams mono e mantém o roteamento L/R correto.
+    const int channelCount = oboeStream->getChannelCount();
 
     // MIXER NATIVO (Zero Latency Synthesis)
     float panningValue = targetPanning.load();
@@ -111,7 +105,7 @@ oboe::DataCallbackResult OboeEngine::onAudioReady(
 
     for(int i = 0; i < numFrames; i++) {
         float monoTarget = targetPlayer.getNextSample();
-        
+
         // Detecção de Início do Estímulo na exata amostra do hardware [PASSO 2]
         if (monoTarget != 0.0f && !wasStimulusActive) {
             markStimulusOnset();
@@ -123,21 +117,22 @@ oboe::DataCallbackResult OboeEngine::onAudioReady(
         float monoNoise = noisePlayer.getNextSample();
         float monoWhite = whiteNoiseGenerator.getNextSample();
 
-        for(int ch = 0; ch < 2; ch++) {
+        for(int ch = 0; ch < channelCount; ch++) {
             float mixedSample = 0.0f;
-            float gain = (ch == 0) ? leftGain : rightGain;
-            
+            // ch 0 = esquerdo, 1 = direito. Em mono (1 canal) o gain é 1.0.
+            float gain = (channelCount < 2) ? 1.0f : ((ch == 0) ? leftGain : rightGain);
+
             // 1. Testa tom puro (Lateralizado via Oscillador)
             mixedSample += testOscillator.getNextSample(ch);
-            
+
             // 2. Canal de Estimulação Espacializada (Binaural Panning)
             mixedSample += monoTarget * gain;
-            
+
             // 3. Canais de Ruído (Centrados para Mascaramento)
             mixedSample += monoNoise;
             mixedSample += monoWhite;
 
-            floatData[i * 2 + ch] = mixedSample;
+            floatData[i * channelCount + ch] = mixedSample;
         }
         testOscillator.updatePhase();
     }
@@ -145,7 +140,7 @@ oboe::DataCallbackResult OboeEngine::onAudioReady(
     // Processamento do Pipeline DSP (IIR/FIR Híbrido)
     // Roteamento para a matemática Híbrida do Crossover e EQ paramétrico
     dspEngine.processAudioBlock(floatData, numFrames, oboeStream->getChannelCount());
-    
+
     // FIM DA MEDIÇÃO: Cálculo de Carga de CPU dedicada (DSP Load)
     auto endTime = std::chrono::high_resolution_clock::now();
     auto processTimeNs = std::chrono::duration_cast<std::chrono::nanoseconds>(endTime - startTime).count();

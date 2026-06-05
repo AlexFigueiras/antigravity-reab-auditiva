@@ -1,13 +1,15 @@
 enum RehabLevel {
-  toneIsolation(1, unlockThreshold: 90.0),
-  phonemicDiscrimination(2, unlockThreshold: 85.0),
-  spatialAttention(3, unlockThreshold: 80.0),
-  speechInNoise(4, unlockThreshold: 0.0); // Nível final
+  toneIsolation(1, unlockThreshold: 70.0),
+  phonemicDiscrimination(2, unlockThreshold: 70.0),
+  spatialAttention(3, unlockThreshold: 70.0),
+  speechInNoise(4, unlockThreshold: 0.0); // Nível final — paywall (Frases)
 
   final int value;
-  final double unlockThreshold; // Precisão necessária para liberar o próximo nível
+  /// Acurácia média (últimas 3 sessões) necessária para desbloquear o
+  /// próximo nível. 70% = melhora clínica sustentada, não sorte num único dia.
+  final double unlockThreshold;
 
-  const RehabLevel(this.value, {this.unlockThreshold = 85.0});
+  const RehabLevel(this.value, {this.unlockThreshold = 70.0});
 }
 
 class RehabSession {
@@ -59,25 +61,53 @@ class RehabSession {
     metadata: json['metadata'],
   );
 
-  /// Determina se o nível atual desbloqueou o próximo baseado no histórico.
+  /// Determina o nível máximo desbloqueado com base no desempenho real.
+  ///
+  /// Regra: média de acertos das **últimas 3 sessões** do nível anterior
+  /// precisa atingir [unlockThreshold] (70%). Isso evita desbloqueios por
+  /// sorte em uma sessão isolada e garante melhora sustentada.
+  ///
+  /// Nível 2 (Distinguir sons) está sempre liberado após o audiograma.
+  /// Nível 5 (Frases) exige assinatura — não entra aqui.
   static int calculateUnlockedLevel(List<RehabSession> history) {
-    int maxUnlocked = 1; // Nível 1 sempre começa liberado
-    
+    int maxUnlocked = 2; // Nível 2 sempre começa liberado (com audiograma)
+
     for (var level in RehabLevel.values) {
-      if (level == RehabLevel.speechInNoise) break;
+      if (level == RehabLevel.speechInNoise) break; // nível 4 é o último desbloqueável por desempenho
+      if (level.value < 2) continue; // nível 1 (tone isolation) não é usado no fluxo atual
 
-      final sessionForLevel = history.where((s) => s.level == level).toList();
-      if (sessionForLevel.isEmpty) break;
+      final sessionsForLevel = history
+          .where((s) => s.level == level)
+          .toList();
+      if (sessionsForLevel.length < 3) break; // precisa de pelo menos 3 sessões
 
-      // Se a última sessão (ou a melhor) atingiu o threshold, libera o próximo
-      final bestAccuracy = sessionForLevel.map((s) => s.accuracy).reduce((a, b) => a > b ? a : b);
-      
-      if (bestAccuracy >= level.unlockThreshold) {
+      // Média das 3 sessões mais recentes
+      final lastThree = sessionsForLevel
+          .reversed
+          .take(3)
+          .map((s) => s.accuracy)
+          .toList();
+      final avgAccuracy = lastThree.reduce((a, b) => a + b) / lastThree.length;
+
+      if (avgAccuracy >= level.unlockThreshold) {
         maxUnlocked = level.value + 1;
       } else {
-        break; // Bloqueado no nível atual
+        break;
       }
     }
-    return maxUnlocked;
+    return maxUnlocked.clamp(2, 4);
+  }
+
+  /// Retorna a acurácia média das últimas [count] sessões de um nível.
+  /// Útil para mostrar progresso ao desbloqueio na UI.
+  static double averageAccuracyForLevel(
+      List<RehabSession> history, RehabLevel level,
+      {int count = 3}) {
+    final sessions = history
+        .where((s) => s.level == level)
+        .toList();
+    if (sessions.isEmpty) return 0;
+    final recent = sessions.reversed.take(count).map((s) => s.accuracy).toList();
+    return recent.reduce((a, b) => a + b) / recent.length;
   }
 }
