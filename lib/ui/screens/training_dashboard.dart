@@ -547,36 +547,79 @@ class _TrainingDashboardState extends State<TrainingDashboard>
     );
   }
 
+  // Dose mínima efetiva por sessão (Sweetow & Sabes 2006): ~20 estímulos.
+  // Não bloqueia — é celebração, não barreira.
+  static const int _sessionGoalTrials = 20;
+
   Widget _buildSessionIndicator() {
     final accuracy = _totalTrials > 0
         ? (_correctAnswers / _totalTrials * 100).toStringAsFixed(0)
         : '--';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-      decoration: BoxDecoration(
-        color: _card,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.check_circle_outline, color: _correct, size: 20),
-          const SizedBox(width: 8),
-          Text(
-            "$_correctAnswers/$_totalTrials acertos",
-            style: const TextStyle(
-                color: _textMain, fontSize: 16, fontWeight: FontWeight.w600),
+    final goalReached = _totalTrials >= _sessionGoalTrials;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+          decoration: BoxDecoration(
+            color: _card,
+            borderRadius: BorderRadius.circular(12),
           ),
-          const SizedBox(width: 16),
-          Text(
-            "$accuracy%",
-            style: TextStyle(
-                color: _totalTrials > 0 ? _primary : _textSoft,
-                fontSize: 16,
-                fontWeight: FontWeight.w700),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.check_circle_outline, color: _correct, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                "$_correctAnswers/$_totalTrials acertos",
+                style: const TextStyle(
+                    color: _textMain, fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(width: 16),
+              Text(
+                "$accuracy%",
+                style: TextStyle(
+                    color: _totalTrials > 0 ? _primary : _textSoft,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700),
+              ),
+              if (!goalReached) ...[
+                const SizedBox(width: 16),
+                Text(
+                  "${_sessionGoalTrials - _totalTrials} restam",
+                  style: TextStyle(color: _textSoft, fontSize: 13),
+                ),
+              ],
+            ],
           ),
-        ],
-      ),
+        ),
+        if (goalReached)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: _correct.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: _correct.withValues(alpha: 0.4)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.celebration_rounded, color: Color(0xFF3FB37F), size: 16),
+                  SizedBox(width: 6),
+                  Text(
+                    "Meta batida! Pode continuar ou encerrar.",
+                    style: TextStyle(
+                        color: Color(0xFF3FB37F),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 
