@@ -595,11 +595,14 @@ class _ProgressScreenState extends State<ProgressScreen>
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(e.key,
-                      style: TextStyle(
-                          color: _textMain,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold)),
+                  Expanded(
+                    child: Text(e.key,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: _textMain,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold)),
+                  ),
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 4),
