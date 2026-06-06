@@ -48,22 +48,34 @@ void main() {
   });
 
   group('calculateUnlockedLevel', () {
-    test('histórico vazio mantém apenas o nível 1', () {
-      expect(RehabSession.calculateUnlockedLevel([]), 1);
+    test('histórico vazio já libera o nível 2 (Distinguir sons) após o audiograma', () {
+      expect(RehabSession.calculateUnlockedLevel([]), 2);
     });
 
-    test('atingir o threshold libera o próximo nível', () {
+    test('3 sessões do nível 2 com média >= 70% liberam os níveis 3 e 4', () {
       final history = [
-        session(level: RehabLevel.toneIsolation, total: 10, correct: 10), // 100% >= 90
+        session(level: RehabLevel.phonemicDiscrimination, total: 10, correct: 8), // 80%
+        session(level: RehabLevel.phonemicDiscrimination, total: 10, correct: 7), // 70%
+        session(level: RehabLevel.phonemicDiscrimination, total: 10, correct: 9), // 90%
+      ];
+      expect(RehabSession.calculateUnlockedLevel(history), 4);
+    });
+
+    test('nível 2 abaixo da média de 70% mantém apenas o nível 2 liberado', () {
+      final history = [
+        session(level: RehabLevel.phonemicDiscrimination, total: 10, correct: 5), // 50%
+        session(level: RehabLevel.phonemicDiscrimination, total: 10, correct: 6), // 60%
+        session(level: RehabLevel.phonemicDiscrimination, total: 10, correct: 5), // 50%
       ];
       expect(RehabSession.calculateUnlockedLevel(history), 2);
     });
 
-    test('abaixo do threshold não libera', () {
+    test('menos de 3 sessões do nível 2 não libera os níveis seguintes', () {
       final history = [
-        session(level: RehabLevel.toneIsolation, total: 10, correct: 5), // 50% < 90
+        session(level: RehabLevel.phonemicDiscrimination, total: 10, correct: 10), // 100%
+        session(level: RehabLevel.phonemicDiscrimination, total: 10, correct: 10), // 100%
       ];
-      expect(RehabSession.calculateUnlockedLevel(history), 1);
+      expect(RehabSession.calculateUnlockedLevel(history), 2);
     });
   });
 }
