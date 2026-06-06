@@ -383,7 +383,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
           _playCurrentTestTone();
         });
       } else {
-        // Não ouviu o tom de 80 dB. Aumenta em passos de 10 dB até ouvir ou atingir 120 dB.
+        // Não ouviu o tom de familiarização. Aumenta em passos de 10 dB até ouvir ou atingir 120 dB.
         if (_currentDb >= 120.0) {
           _recordThresholdAndNext(120.0);
         } else {

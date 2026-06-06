@@ -210,7 +210,8 @@ fala sai muda sem erro visível.
     senão a espacialização por azimuth (usada no treino) remove o isolamento de canal do teste de tom puro.
 
 4. **Teste reiniciava em 8000 Hz ao trocar de orelha.** `_chooseEar` não resetava
-   `_currentFreqIndex`. **Fix:** `_currentFreqIndex = 0;`. Frequências: `[250,500,1000,2000,4000,8000]`.
+   `_currentFreqIndex`. **Fix:** `_currentFreqIndex = 0;`. Frequências (10 pontos, `_frequencies`
+   em `threshold_test_screen.dart`): `[250,500,750,1000,1500,2000,3000,4000,6000,8000]`.
 
 5. **Título sobreposto na tela de escolher orelha.** AppBar transparente +
    `extendBodyBehindAppBar`. **Fix:** `SafeArea` + `topGap` (padding.top + kToolbarHeight + 16).
@@ -252,11 +253,11 @@ fala sai muda sem erro visível.
     preciso. Diagnóstico: log `[ENGINE] Stream desconectado`.
 
 11. **Lógica de Hughson-Westlake no Teste de Audição Relativo (IMPLANTADO).**
-    O teste agora utiliza passos de 5 dB em vez de 10 dB. Segue o algoritmo clássico de Hughson-Westlake: 
+    Segue o algoritmo clássico de Hughson-Westlake com passos **assimétricos**:
     - Resposta "SIM" (Escutei): diminui a intensidade em 10 dB.
     - Resposta "NÃO" (Não escutei): aumenta a intensidade em 5 dB.
     - Confirmação do limiar: o limiar é confirmado quando o usuário responde "SIM" pelo menos duas vezes no mesmo nível de intensidade durante a fase ascendente.
-    - Fase de familiarização: antes de cada frequência, um tom de 80 dB é apresentado. O teste só avança se o usuário confirmar que escutou.
+    - Fase de familiarização: antes de cada frequência, a busca inicia em **40 dB** (`_currentDb = 40.0`); se o usuário não ouvir, sobe +10 dB até ouvir ou atingir 120 dB. O teste só avança após confirmar que escutou.
     - Catch-trials silenciosos: 20% das apresentações são silenciosas. Se o usuário responder "SIM" (falso positivo), é exibido um SnackBar educativo e o nível é testado novamente.
     - Terminologia simplificada na UI: "audiograma" virou "teste de audição relativo" e "dB HL" virou "nível de som" para não assustar o idoso.
     - **Intervalo de Transição Silencioso Clínico (IMPLANTADO):** Há um atraso de 1.2 segundos entre cada tom apresentado no teste. Os botões de resposta "SIM" e "NÃO" são desabilitados e renderizados num estado inativo/cinza durante esse delay para evitar cliques duplos. O tom ativo é interrompido imediatamente no player C++ ao receber a resposta através do método `stopTarget()`.
