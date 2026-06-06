@@ -174,11 +174,21 @@ class NativeDSPBridge implements ffi.Finalizable {
     return func(_enginePtr);
   }
 
+  /// Configura o Peaking EQ nativo com o perfil audiométrico do paciente
+  /// freqs: frequências (Hz), gains: ganhos compensatórios (dB, Half-Gain)
+  void setAudiogramProfile(ffi.Pointer<ffi.Float> freqs, ffi.Pointer<ffi.Float> gains, int count) {
+    final func = _lib.lookupFunction<
+        ffi.Void Function(ffi.Pointer<EngineContext>, ffi.Pointer<ffi.Float>, ffi.Pointer<ffi.Float>, ffi.Int32),
+        void Function(ffi.Pointer<EngineContext>, ffi.Pointer<ffi.Float>, ffi.Pointer<ffi.Float>, int)
+    >('set_audiogram_profile');
+    func(_enginePtr, freqs, gains, count);
+  }
+
   void dispose() {
     finalizer.detach(this);
     stopHardwareAudio();
     final destroy = _lib.lookupFunction<
-        ffi.Void Function(ffi.Pointer<EngineContext>), 
+        ffi.Void Function(ffi.Pointer<EngineContext>),
         void Function(ffi.Pointer<EngineContext>)
     >('destroy_engine');
     destroy(_enginePtr);

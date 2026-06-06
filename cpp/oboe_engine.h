@@ -69,6 +69,10 @@ public:
         whiteNoiseGenerator.setAmplitude(intensity);
     }
 
+    void setAudiogramProfile(const float* freqs, const float* gains, int count) {
+        dspEngine.setAudiogramProfile(freqs, gains, count);
+    }
+
     // PASSO 2: Event Tagging Clínico
     // Marca o instante exato em que o estímulo é escrito pelo hardware de áudio.
     void markStimulusOnset() {

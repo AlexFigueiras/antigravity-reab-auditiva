@@ -150,6 +150,14 @@ bool consume_soft_knee_flag(EngineContext* ctx) {
     return false;
 }
 
+// Configura EQ adaptativo com perfil audiométrico do paciente
+NATIVE_EXPORT
+void set_audiogram_profile(EngineContext* ctx, float* freqs, float* gains, int32_t count) {
+#ifdef __ANDROID__
+    if (ctx && ctx->engine) ctx->engine->setAudiogramProfile(freqs, gains, count);
+#endif
+}
+
 NATIVE_EXPORT
 const char* get_clock_info() {
     return "std::chrono::high_resolution_clock (nanoseconds)";

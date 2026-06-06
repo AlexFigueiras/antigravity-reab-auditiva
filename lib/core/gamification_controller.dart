@@ -13,29 +13,24 @@ class GamificationController extends ChangeNotifier {
   int _totalXP = 0;
   int _neuralEnergy = 5;
   int _currentStreak = 0;
+  int _sessionsCompletedToday = 0;
   String _acuityLevel = "INITIAL";
 
   // NÍVEL 4: Ambiente Hostil [EFEITO COQUETEL]
-  double _currentSNR = 20.0; // dB (Início Seguro: 20dB)
-  double _maxNoiseThreshold = 0.0; // dB (Onde o acerto foi de 80%)
-  
-  DateTime? _energyEmptyAt; // Timestamp de quando a energia acabou
+  double _currentSNR = 20.0;
+  double _maxNoiseThreshold = 0.0;
 
   // Getters
   int get totalXP => _totalXP;
   int get neuralEnergy => _neuralEnergy;
   int get currentStreak => _currentStreak;
+  int get sessionsCompletedToday => _sessionsCompletedToday;
   String get acuityLevel => _acuityLevel;
   bool get hasEnergy => _neuralEnergy > 0;
+  // Recomendação suave (sem bloco duro): ≥2 sessões/dia = mínimo efetivo
+  bool get recommendRest => _sessionsCompletedToday >= 2;
   double get currentSNR => _currentSNR;
   double get maxNoiseThreshold => _maxNoiseThreshold;
-  
-  Duration get remainingRestTime {
-    if (_energyEmptyAt == null) return Duration.zero;
-    final diff = DateTime.now().difference(_energyEmptyAt!);
-    final remaining = const Duration(hours: 4) - diff;
-    return remaining.isNegative ? Duration.zero : remaining;
-  }
 
   /// Seleção Inteligente baseada no Audiograma [Fase 1]
   Map<String, dynamic>? getSmartPhoneme(List<dynamic> audiogramData) {
@@ -58,24 +53,18 @@ class GamificationController extends ChangeNotifier {
 
   /// Adiciona XP baseado na performance e tipo de fonema [ANALYTICS]
   void addAcuityXP(double successRate, List<String> phonemes) {
-    if (_neuralEnergy <= 0) return;
-
     double baseXP = 100 * successRate;
-    bool hasHighFrequencyPhonemes = phonemes.any((p) => 
-      ['s', 'f', 't', 'ç', 'x', 'ch', 'spatial'].contains(p.toLowerCase())
+    bool hasHighFrequencyPhonemes = phonemes.any((p) =>
+      ['s', 'f', 't', 'ç', 'x', 'ch', 'spatial', 'z', 'fricative', 'sibilant'].contains(p.toLowerCase())
     );
 
     double multiplier = hasHighFrequencyPhonemes ? 2.0 : 1.0;
     _totalXP += (baseXP * multiplier).toInt();
-    
-    // Automação Clínica Nível 4: Se acerto > 80%, dificulta o ambiente (Diminui SNR)
-    if (successRate >= 0.8 && phonemes.contains('cocktail')) {
-        _currentSNR -= 2.0; // Aumenta ruído (+2dB)
-        if (_currentSNR < _maxNoiseThreshold) _maxNoiseThreshold = _currentSNR;
-    }
 
-    if (successRate < 0.8 && hasHighFrequencyPhonemes) {
-      consumeEnergy();
+    // Nível 4: acerto sustentado acima de 80% → aumenta dificuldade (SNR menor)
+    if (successRate >= 0.8 && phonemes.contains('cocktail')) {
+      _currentSNR = (_currentSNR - 2.0).clamp(-10.0, 20.0);
+      if (_currentSNR < _maxNoiseThreshold) _maxNoiseThreshold = _currentSNR;
     }
 
     _updateAcuityLevel();
@@ -90,14 +79,28 @@ class GamificationController extends ChangeNotifier {
   void consumeEnergy() {
     if (_neuralEnergy > 0) {
       _neuralEnergy--;
-      if (_neuralEnergy == 0) _energyEmptyAt = DateTime.now();
       notifyListeners();
     }
   }
 
+  /// Reinicia energia para nova sessão. Chamar no initState de cada tela de treino.
+  void resetEnergyForNewSession() {
+    _neuralEnergy = 5;
+    notifyListeners();
+  }
+
   void resetEnergy() {
     _neuralEnergy = 5;
-    _energyEmptyAt = null;
+    notifyListeners();
+  }
+
+  void incrementSessionsToday() {
+    _sessionsCompletedToday++;
+    notifyListeners();
+  }
+
+  void setSessionsCompletedToday(int count) {
+    _sessionsCompletedToday = count;
     notifyListeners();
   }
 

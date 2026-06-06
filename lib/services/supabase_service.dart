@@ -89,6 +89,31 @@ class SupabaseService {
     return response.map((data) => RehabSession.fromJson(data)).toList();
   }
 
+  /// Salva o estado de gamificação no perfil do usuário
+  Future<void> saveGamificationData(Map<String, dynamic> data) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+    await Supabase.instance.client
+        .from('profiles')
+        .update({'gamification_data': data})
+        .eq('user_id', user.id);
+  }
+
+  /// Carrega o estado de gamificação do perfil do usuário
+  Future<Map<String, dynamic>?> loadGamificationData() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return null;
+    final res = await Supabase.instance.client
+        .from('profiles')
+        .select('gamification_data')
+        .eq('user_id', user.id)
+        .maybeSingle();
+    if (res == null) return null;
+    final data = res['gamification_data'];
+    if (data == null) return null;
+    return Map<String, dynamic>.from(data as Map);
+  }
+
   /// Recupera a evolução da latência média das últimas 5 sessões [SENIOR-FULLSTACK]
   Future<List<Map<String, dynamic>>> getLatencyEvolution() async {
     final user = Supabase.instance.client.auth.currentUser;

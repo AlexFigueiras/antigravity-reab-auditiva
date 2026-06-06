@@ -34,6 +34,19 @@
     {'target': 'Zero', 'distractor': 'Sero', 'freq_band': 4300, 'type': 'voiced_sibilant'},
     {'target': 'Pote', 'distractor': 'Bote', 'freq_band': 3100, 'type': 'plosive'},
 
+    // --- ZONA MÉDIA-BAIXA (2kHz - 3kHz): Nasais e Fricativas Sonoras ---
+    // Nasais afetadas por perda em agudos: pistas de F2/F3 de transição
+    {'target': 'Mala', 'distractor': 'Bala', 'freq_band': 2800, 'type': 'nasal'},
+    {'target': 'Mola', 'distractor': 'Bola', 'freq_band': 2600, 'type': 'nasal'},
+    {'target': 'Mudo', 'distractor': 'Budo', 'freq_band': 2900, 'type': 'nasal'},
+    {'target': 'Nata', 'distractor': 'Data', 'freq_band': 2500, 'type': 'nasal'},
+    {'target': 'Nada', 'distractor': 'Dada', 'freq_band': 2700, 'type': 'nasal'},
+    {'target': 'Nobre', 'distractor': 'Dobre', 'freq_band': 2400, 'type': 'nasal'},
+    // Fricativas sonoras /z/ — confundidas com /s/ por perda em agudos
+    {'target': 'Zona', 'distractor': 'Sona', 'freq_band': 4000, 'type': 'voiced_sibilant'},
+    {'target': 'Zaga', 'distractor': 'Saga', 'freq_band': 4200, 'type': 'voiced_sibilant'},
+    {'target': 'Zela', 'distractor': 'Sela', 'freq_band': 4100, 'type': 'voiced_sibilant'},
+
     // --- ITENS DINÂMICOS ---
     {'target': 'Palavra1', 'distractor': 'Falsa1', 'freq_band': 5515, 'type': 'random_rehab'},
     {'target': 'Palavra2', 'distractor': 'Falsa2', 'freq_band': 8008, 'type': 'random_rehab'},
