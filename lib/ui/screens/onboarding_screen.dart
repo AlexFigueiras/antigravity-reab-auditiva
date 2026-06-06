@@ -2,22 +2,45 @@ import 'package:flutter/material.dart';
 import 'package:introduction_screen/introduction_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../audio_engine/audio_engine.dart';
+import '../../models/audiogram.dart';
+import '../../screens/threshold_test_screen.dart';
+import '../../services/supabase_service.dart';
 import 'home_screen.dart';
 
-/// SCREEN: Onboarding e Calibração [ORQUESTRADOR]
+/// SCREEN: Onboarding e Teste Auditivo Inicial [ORQUESTRADOR]
 class OnboardingScreen extends StatelessWidget {
   const OnboardingScreen({super.key});
 
   Future<void> _completeOnboarding(BuildContext context) async {
     final user = Supabase.instance.client.auth.currentUser;
-    if (user != null) {
-      // Atualiza status no Supabase [SSOT]
-      await Supabase.instance.client
-          .from('profiles')
-          .update({'onboarding_completed': true})
-          .eq('user_id', user.id);
+    if (user == null) return;
+
+    // Verifica se já tem audiograma. Se não tiver, conduz ao teste.
+    final existing = await SupabaseService().getPatientHistory(user.id);
+    if (existing.isEmpty && context.mounted) {
+      final result = await Navigator.of(context).push<Map<String, dynamic>>(
+        MaterialPageRoute(builder: (_) => const ThresholdTestScreen()),
+      );
+
+      if (result != null) {
+        final leftEar = List<AudiometryPoint>.from(result['left'] as List);
+        final rightEar = List<AudiometryPoint>.from(result['right'] as List);
+        final audiogram = Audiogram(
+          id: '',
+          patientId: user.id,
+          date: DateTime.now(),
+          leftEar: leftEar,
+          rightEar: rightEar,
+        );
+        await SupabaseService().saveAudiogram(audiogram);
+      }
     }
-    
+
+    await Supabase.instance.client
+        .from('profiles')
+        .update({'onboarding_completed': true})
+        .eq('user_id', user.id);
+
     if (context.mounted) {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const HomeScreen()),
@@ -32,27 +55,27 @@ class OnboardingScreen extends StatelessWidget {
       pages: [
         PageViewModel(
           title: "NEUROPLASTICIDADE",
-          body: "O BOSYN utiliza o método de 'Minimal Pairs' para remapear como seu cérebro processa frequências agudas perdida.",
+          body: "O BOSYN utiliza o método de 'Minimal Pairs' para remapear como seu cérebro processa frequências agudas perdidas. 2 sessões por dia, 5 dias por semana, 6-8 semanas.",
           decoration: _pageDecoration(),
         ),
         PageViewModel(
           title: "CHECK DE HARDWARE",
-          body: "Ajuste o volume do seu dispositivo até que o tom de calibração esteja confortável e nítido.",
+          body: "Use fones de ouvido. Ajuste o volume até o tom de calibração estar confortável e nítido — nem alto demais, nem inaudível.",
           footer: _buildCalibrationControl(),
           decoration: _pageDecoration(),
         ),
         PageViewModel(
-          title: "MODO COCKPIT",
-          body: "Você está prestes a entrar em um ambiente de treinamento de alta precisão. Concentração total exigida.",
+          title: "TESTE AUDITIVO",
+          body: "Ao clicar em 'INICIAR', você será guiado por um breve teste de limiar auditivo. Isso permite ao sistema personalizar seu treino com base na sua perda específica.",
           decoration: _pageDecoration(),
         ),
       ],
       onDone: () => _completeOnboarding(context),
       onSkip: () => _completeOnboarding(context),
       showSkipButton: true,
-      skip: const Text("PULAR", style: TextStyle(color: Colors.white24, fontSize: 10)),
+      skip: const Text("PULAR TESTE", style: TextStyle(color: Colors.white24, fontSize: 10)),
       next: const Icon(Icons.arrow_forward, color: Color(0xFF00FF41)),
-      done: const Text("ENTRAR NO COCKPIT", style: TextStyle(color: Color(0xFF00FF41), fontWeight: FontWeight.bold, fontSize: 10)),
+      done: const Text("INICIAR TESTE AUDITIVO", style: TextStyle(color: Color(0xFF00FF41), fontWeight: FontWeight.bold, fontSize: 10)),
       dotsDecorator: const DotsDecorator(
         size: Size(10, 10),
         color: Colors.white12,
@@ -87,7 +110,13 @@ class OnboardingScreen extends StatelessWidget {
 
   PageDecoration _pageDecoration() {
     return const PageDecoration(
-      titleTextStyle: TextStyle(color: Color(0xFF00FF41), fontSize: 24, fontWeight: FontWeight.w900, fontFamily: 'monospace', letterSpacing: 2),
+      titleTextStyle: TextStyle(
+        color: Color(0xFF00FF41),
+        fontSize: 24,
+        fontWeight: FontWeight.w900,
+        fontFamily: 'monospace',
+        letterSpacing: 2,
+      ),
       bodyTextStyle: TextStyle(color: Colors.white70, fontSize: 14, fontFamily: 'monospace'),
       pageColor: Color(0xFF0A0A0A),
       imagePadding: EdgeInsets.zero,

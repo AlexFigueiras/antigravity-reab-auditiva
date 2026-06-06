@@ -54,6 +54,29 @@ void DspEngine::initializeParameters() {
     }
 }
 
+// Reconfigura Peaking EQ com o perfil audiométrico do paciente
+// Aplica a frequência de maior perda e seu Half-Gain como novo ponto central do EQ
+void DspEngine::setAudiogramProfile(const float* freqs, const float* gains, int count) {
+    if (count <= 0) return;
+
+    // Encontra a frequência com maior ganho (maior perda no audiograma = maior ganho compensatório)
+    float maxGain = gains[0];
+    float centerFreq = freqs[0];
+    for (int i = 1; i < count; i++) {
+        if (gains[i] > maxGain) {
+            maxGain = gains[i];
+            centerFreq = freqs[i];
+        }
+    }
+
+    // Reconfigura Peaking EQ para a frequência de maior déficit
+    // Q=4.32 preserva banda estreita (~0.23 oitava) para precisão clínica
+    const float Q = 4.32f;
+    for (int i = 0; i < 2; i++) {
+        peakingEQ[i].configurePeakingEQ(sampleRate, centerFreq, Q, maxGain);
+    }
+}
+
 // Núcleo de Latência Ultrabaixa (Obrigação: Executar em < 20ms de latência overall)
 void DspEngine::processAudioBlock(float* audioData, int numFrames, int numChannels) {
     if (numChannels > 2) numChannels = 2; // Suporta apenas mono/stereo

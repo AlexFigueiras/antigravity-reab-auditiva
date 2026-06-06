@@ -37,7 +37,11 @@ public:
     ~DspEngine();
 
     void initializeParameters();
-    
+
+    // Reconfigura o Peaking EQ com base no audiograma do paciente (Half-Gain Rule)
+    // freqs: array de frequências (Hz), gains: array de ganhos (dB), count: tamanho
+    void setAudiogramProfile(const float* freqs, const float* gains, int count);
+
     // Bloco Principal de Processamento do Callback de Áudio (C++ Core)
     void processAudioBlock(float* audioData, int numFrames, int numChannels);
 
