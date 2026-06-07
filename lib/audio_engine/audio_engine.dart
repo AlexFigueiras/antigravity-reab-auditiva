@@ -37,7 +37,32 @@ class AudioRehabEngine {
   final _nativeBridge = NativeDSPBridge();
   late final SystemTtsService _tts;
 
+  // Idioma da fala (TTS). A voz TEM de bater com o idioma do conteúdo, senão a
+  // pronúncia fica errada (ex.: voz inglesa lendo palavra portuguesa). Default
+  // 'pt-BR'; o app seta conforme o idioma escolhido (ver setTtsLanguage / i18n).
+  // ⚠️ Trocar o idioma da fala NÃO traduz o conteúdo clínico (pares mínimos /
+  // frases Matrix) — isso é a "Frente 2" (conteúdo validado por idioma).
+  String _ttsLanguageCode = 'pt-BR';
+  void setTtsLanguage(String languageCode) {
+    _ttsLanguageCode = languageCode;
+  }
+
+  /// True se a variante de voz do idioma ATUAL (ex.: 'pt-BR') está instalada no
+  /// device. Usado pela UI para avisar quando a fala sairá com outro sotaque.
+  /// Ver docs/i18n.md (disponibilidade de voz no device).
+  Future<bool> isTtsLocaleInstalled() =>
+      _tts.isLocaleInstalled(_ttsLanguageCode);
+
   // Calibração: 0dB HL -> 0.0001 linear. 80dB HL -> 1.0 linear.
+  //
+  // ATENÇÃO: esta referência só tem significado ESTÁVEL porque o volume de mídia
+  // do sistema é fixado em AudioAccessibility.kReferenceVolumeFraction (~85%)
+  // tanto no teste de audição quanto nos treinos. A amplitude digital é só um dos
+  // três ganhos em série (digital × volume do sistema × sensibilidade do fone);
+  // fixando o do meio, o limiar medido e o ganho de meia-perda passam a viver no
+  // mesmo referencial. 85% (não 100%) deixa headroom para o EQ somar ganho sem
+  // bater no soft-limiter de -3 dBFS do DSP (ver dsp_engine.cpp). NÃO é dB HL
+  // absoluto — é triagem relativa. Se mudar o nível de referência, revise isto.
   static const double _kRefDb = 80.0;
   static const double _fs = 48000.0; // Sample Rate padrão do Engine
 
@@ -140,7 +165,7 @@ class AudioRehabEngine {
     }
 
     if (samples == null) {
-      final speech = await _tts.synthesize(text);
+      final speech = await _tts.synthesize(text, languageCode: _ttsLanguageCode);
       final bytes = await File(speech.path).readAsBytes();
       final raw = _convertInt16ToFloat32(bytes);
       samples = _resampleTo(raw, speech.sampleRate, _fs.toInt());

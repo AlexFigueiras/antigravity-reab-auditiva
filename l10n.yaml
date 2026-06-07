@@ -1,0 +1,11 @@
+# Configuração da geração de localização (flutter gen-l10n).
+# Padrão 2026: gera o source no projeto (não em pacote sintético).
+#
+# Português (pt) é o template — o app nasceu em pt-BR e é a fonte da verdade.
+# Inglês (en) é a tradução. Ao adicionar idiomas, basta criar app_<locale>.arb.
+arb-dir: lib/l10n
+template-arb-file: app_pt.arb
+output-localization-file: app_localizations.dart
+output-class: AppLocalizations
+output-dir: lib/l10n/gen
+nullable-getter: false

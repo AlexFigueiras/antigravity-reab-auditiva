@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../l10n/gen/app_localizations.dart';
 
 /// Pergunta semanal de autopercepção (Fase 3).
 /// Escala 1-5 acessível: 1 = Muito difícil ... 5 = Muito bem.
@@ -13,13 +14,23 @@ class SelfPerceptionPrompt extends StatelessWidget {
     this.onDismiss,
   });
 
-  static const List<Map<String, dynamic>> _options = [
-    {'score': 1, 'emoji': '😟', 'label': 'Muito difícil'},
-    {'score': 2, 'emoji': '🙁', 'label': 'Difícil'},
-    {'score': 3, 'emoji': '😐', 'label': 'Mais ou menos'},
-    {'score': 4, 'emoji': '🙂', 'label': 'Bem'},
-    {'score': 5, 'emoji': '😀', 'label': 'Muito bem'},
+  static const List<Map<String, dynamic>> _scores = [
+    {'score': 1, 'emoji': '😟', 'key': 'veryHard'},
+    {'score': 2, 'emoji': '🙁', 'key': 'hard'},
+    {'score': 3, 'emoji': '😐', 'key': 'soSo'},
+    {'score': 4, 'emoji': '🙂', 'key': 'well'},
+    {'score': 5, 'emoji': '😀', 'key': 'veryWell'},
   ];
+
+  String _label(String key, AppLocalizations l10n) {
+    switch (key) {
+      case 'veryHard': return l10n.selfPerceptionVeryHard;
+      case 'hard':     return l10n.selfPerceptionHard;
+      case 'soSo':     return l10n.selfPerceptionSoSo;
+      case 'well':     return l10n.selfPerceptionWell;
+      default:         return l10n.selfPerceptionVeryWell;
+    }
+  }
 
   /// Exibe como diálogo modal. Salva via [onSubmit] ao escolher.
   static Future<void> show(
@@ -47,6 +58,7 @@ class SelfPerceptionPrompt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -55,10 +67,10 @@ class SelfPerceptionPrompt extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  "Quão bem você acompanhou as conversas esta semana?",
-                  style: TextStyle(
+                  l10n.selfPerceptionQuestion,
+                  style: const TextStyle(
                       color: Colors.white,
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -73,12 +85,12 @@ class SelfPerceptionPrompt extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          const Text(
-            "Sua resposta nos ajuda a acompanhar seu progresso.",
-            style: TextStyle(color: Colors.white54, fontSize: 14),
+          Text(
+            l10n.selfPerceptionSubtitle,
+            style: const TextStyle(color: Colors.white54, fontSize: 14),
           ),
           const SizedBox(height: 20),
-          ..._options.map((opt) => Padding(
+          ..._scores.map((opt) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: SizedBox(
                   width: double.infinity,
@@ -98,7 +110,7 @@ class SelfPerceptionPrompt extends StatelessWidget {
                         Text(opt['emoji'] as String,
                             style: const TextStyle(fontSize: 28)),
                         const SizedBox(width: 16),
-                        Text(opt['label'] as String,
+                        Text(_label(opt['key'] as String, l10n),
                             style: const TextStyle(
                                 fontSize: 18, fontWeight: FontWeight.w600)),
                       ],

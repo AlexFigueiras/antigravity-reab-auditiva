@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:ear_training/core/gamification_controller.dart';
 import 'package:ear_training/core/spatial_controller.dart';
+import 'package:ear_training/services/locale_controller.dart';
+import 'package:ear_training/services/theme_controller.dart';
+import 'package:ear_training/ui/theme/app_palette.dart';
+import 'package:ear_training/l10n/gen/app_localizations.dart';
 import 'package:ear_training/ui/screens/home_screen.dart';
 import 'package:ear_training/ui/screens/auth_screen.dart';
 import 'package:ear_training/ui/screens/onboarding_screen.dart';
@@ -10,6 +14,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'package:ear_training/services/event_buffer.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,6 +24,9 @@ void main() async {
     await dotenv.load(fileName: ".env");
     await SupabaseService().initialize();
     
+    // Inicialização do Google Mobile Ads (AdMob)
+    await MobileAds.instance.initialize();
+    
     // RIGOR CLÍNICO: Sincronização de Telemetria Offline e Escuta de Hardware
     final buffer = SessionEventBuffer();
     await buffer.init();
@@ -27,11 +35,22 @@ void main() async {
     debugPrint("Erro na inicialização: $e");
   }
   
+  // Idioma: carrega a escolha salva antes de montar a UI, para o app já abrir
+  // no idioma certo (sem flash). Se nada salvo, segue o idioma do device.
+  final localeController = LocaleController();
+  await localeController.load();
+
+  // Visual: carrega o tema salvo antes de montar a UI (sem flash). Padrão claro.
+  final themeController = ThemeController();
+  await themeController.load();
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => GamificationController()),
         ChangeNotifierProvider(create: (_) => SpatialController()),
+        ChangeNotifierProvider.value(value: localeController),
+        ChangeNotifierProvider.value(value: themeController),
       ],
       child: const EarTrainingApp(),
     ),
@@ -43,8 +62,14 @@ class EarTrainingApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // watch no idioma aqui (acima do MaterialApp): trocar de idioma reconstrói
+    // o app inteiro com o novo locale.
+    final locale = context.watch<LocaleController>().locale;
+    // watch no tema aqui (acima do MaterialApp): trocar o visual reconstrói o
+    // app inteiro com a nova paleta.
+    final palette = context.watch<ThemeController>().palette;
     final session = Supabase.instance.client.auth.currentSession;
-    if (session == null) return _buildMaterialApp(const AuthScreen());
+    if (session == null) return _buildMaterialApp(const AuthScreen(), locale, palette);
 
     return FutureBuilder(
       future: Supabase.instance.client
@@ -54,15 +79,15 @@ class EarTrainingApp extends StatelessWidget {
           .maybeSingle(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildMaterialApp(const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFF4F8DF7)))));
+          return _buildMaterialApp(Scaffold(body: Center(child: CircularProgressIndicator(color: palette.primary))), locale, palette);
         }
         if (snapshot.hasError) {
           debugPrint("Erro ao carregar perfil: ${snapshot.error}");
           // Falha de rede/perfil ausente: trata como onboarding pendente.
-          return _buildMaterialApp(const OnboardingScreen());
+          return _buildMaterialApp(const OnboardingScreen(), locale, palette);
         }
         final isCompleted = snapshot.data?['onboarding_completed'] ?? false;
-        return _buildMaterialApp(isCompleted ? const HomeScreen() : const OnboardingScreen());
+        return _buildMaterialApp(isCompleted ? const HomeScreen() : const OnboardingScreen(), locale, palette);
       },
     );
   }
@@ -92,20 +117,30 @@ class EarTrainingApp extends StatelessWidget {
     );
   }
 
-  Widget _buildMaterialApp(Widget home) {
+  Widget _buildMaterialApp(Widget home, Locale? locale, AppPalette palette) {
+    final isDark = palette.brightness == Brightness.dark;
+    // Base coerente com o brilho da paleta, depois sobrescrevemos as cores de
+    // marca. Assim os widgets do Material (diálogos, ripple, etc.) já nascem no
+    // claro/escuro certo, e o texto escala igual nos dois temas.
+    final base = isDark ? ThemeData.dark() : ThemeData.light();
     return MaterialApp(
-      title: 'BOSYN - Auditory Rehabilitation',
+      onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF101418),
-        primaryColor: const Color(0xFF4F8DF7),
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF4F8DF7),
-          surface: Color(0xFF1B2128),
+      // i18n: o idioma efetivo vem do LocaleController (escolha do usuário) ou,
+      // se null, do device. supportedLocales/delegates devem casar com os .arb.
+      locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      theme: base.copyWith(
+        scaffoldBackgroundColor: palette.bg,
+        primaryColor: palette.primary,
+        colorScheme: (isDark ? const ColorScheme.dark() : const ColorScheme.light()).copyWith(
+          primary: palette.primary,
+          surface: palette.card,
         ),
-        snackBarTheme: const SnackBarThemeData(
-          backgroundColor: Color(0xFF1B2128),
-          contentTextStyle: TextStyle(color: Color(0xFFF2F4F7), fontSize: 15),
+        snackBarTheme: SnackBarThemeData(
+          backgroundColor: palette.card,
+          contentTextStyle: TextStyle(color: palette.textMain, fontSize: 15),
           behavior: SnackBarBehavior.floating,
         ),
         // Acessibilidade (Fase 3): mais espaçamento e botões maiores para
@@ -114,7 +149,7 @@ class EarTrainingApp extends StatelessWidget {
         // o assert 'fontSize != null' do TextStyle.apply que era disparado
         // ao escalar Text widgets cujo style não tinha fontSize.
         visualDensity: VisualDensity.comfortable,
-        textTheme: _scaleTextTheme(ThemeData.dark().textTheme, 1.1),
+        textTheme: _scaleTextTheme(base.textTheme, 1.1),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             minimumSize: const Size(0, 56),

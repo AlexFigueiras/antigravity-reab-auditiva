@@ -9,6 +9,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: any
   cupertino_icons: ^1.0.6
   audio_session: ^0.1.18
   fl_chart: ^0.68.0
@@ -28,6 +31,7 @@ dependencies:
   shared_preferences: ^2.2.0
   ffi: ^2.1.0
   flutter_tts: ^4.2.0
+  google_mobile_ads: ^4.0.0
 
 dev_dependencies:
   flutter_test:
@@ -36,6 +40,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  generate: true
   assets:
     - .env
     - assets/audio/

@@ -40,3 +40,32 @@ MatrixSentence generateRandomMatrixSentence() {
     adjective: MATRIX_ADJECTIVES[rand.nextInt(MATRIX_ADJECTIVES.length)],
   );
 }
+
+// ─── AMERICAN ENGLISH MATRIX TEST (AEMT) ─────────────────────────────────────
+// Word matrix from the validated American English Matrix Test.
+// Reference: Kollmeier et al. (2015), Int J Audiol 54(sup2):3-16.
+//            Kiolbasa et al. (2024), Int J Audiol 63(5). DOI:10.1080/14992027.2023.2185757
+//            Live test: CI Brain Lab, Washington University in St. Louis.
+// Sentence structure: [Name] [Verb] [Number] [Adjective] [Noun]
+// All names are monosyllabic; nouns are plurals — chosen for homogeneous
+// acoustic loading and semantic unpredictability (prevents top-down guessing).
+const List<String> MATRIX_NAMES_EN = ["Bob", "Gene", "Jane", "Jill", "Lynn"];
+const List<String> MATRIX_VERBS_EN = ["bought", "found", "gave", "held", "lost"];
+const List<String> MATRIX_NUMBERS_EN = ["two", "three", "four", "five", "six"];
+const List<String> MATRIX_ADJECTIVES_EN = ["big", "blue", "cold", "hot", "new"];
+const List<String> MATRIX_NOUNS_EN = ["bags", "cards", "gloves", "hats", "pens"];
+
+/// Generates a random English Matrix sentence.
+MatrixSentence generateRandomMatrixSentenceEn() {
+  final rand = math.Random();
+  // AEMT word order: Name Verb Number Adjective Noun
+  // We reuse MatrixSentence but map: number→number, noun→adjective slot, adjective→noun slot
+  // to keep the data class unchanged. The text getter concatenates in declaration order.
+  return MatrixSentence(
+    name: MATRIX_NAMES_EN[rand.nextInt(MATRIX_NAMES_EN.length)],
+    verb: MATRIX_VERBS_EN[rand.nextInt(MATRIX_VERBS_EN.length)],
+    number: MATRIX_NUMBERS_EN[rand.nextInt(MATRIX_NUMBERS_EN.length)],
+    noun: MATRIX_ADJECTIVES_EN[rand.nextInt(MATRIX_ADJECTIVES_EN.length)],
+    adjective: MATRIX_NOUNS_EN[rand.nextInt(MATRIX_NOUNS_EN.length)],
+  );
+}

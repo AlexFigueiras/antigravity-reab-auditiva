@@ -9,8 +9,14 @@ import '../../models/rehab_session.dart';
 import '../../services/audio_service_manager.dart';
 import '../../services/gatekeeper_service.dart';
 import '../../services/listening_mode_service.dart';
+import '../../services/locale_controller.dart';
 import '../../services/supabase_service.dart';
 import '../widgets/listening_mode_banner.dart';
+import '../widgets/volume_drift_banner.dart';
+import '../../services/audio_accessibility.dart';
+import '../../services/theme_controller.dart';
+import '../theme/app_palette.dart';
+import '../../l10n/gen/app_localizations.dart';
 import 'mission_report_screen.dart';
 import 'dart:math' as math;
 
@@ -27,15 +33,17 @@ class TrainingDashboard extends StatefulWidget {
 
 class _TrainingDashboardState extends State<TrainingDashboard>
     with SingleTickerProviderStateMixin {
-  // Paleta calma (mesma da home).
-  static const _bg = Color(0xFF101418);
-  static const _card = Color(0xFF1B2128);
-  static const _primary = Color(0xFF4F8DF7);
-  static const _textMain = Color(0xFFF2F4F7);
-  static const _textSoft = Color(0xFFB4BCC8);
-  static const _correct = Color(0xFF3FB37F);
+  // Paleta calma (mesma da home) — agora reativa ao tema.
+  AppPalette get _p => context.watch<ThemeController>().palette;
+  Color get _bg => _p.bg;
+  Color get _card => _p.card;
+  Color get _primary => _p.primary;
+  Color get _textMain => _p.textMain;
+  Color get _textSoft => _p.textSoft;
+  Color get _correct => _p.correct;
 
   bool _isTrainingActive = false;
+  bool _volumeDriftWarning = false;
 
   // Estado do Exercício
   Map<String, dynamic>? _currentStimulus;
@@ -152,25 +160,27 @@ class _TrainingDashboardState extends State<TrainingDashboard>
   // Títulos e descrições por nível
   // ---------------------------------------------------------------------------
 
-  String get _title {
+  String _title(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     switch (widget.level) {
       case 3:
-        return "De que lado vem o som";
+        return l10n.dashboardTitleL3;
       case 4:
-        return "Entender no barulho";
+        return l10n.dashboardTitleL4;
       default:
-        return "Distinguir sons";
+        return l10n.dashboardTitleL2;
     }
   }
 
-  String get _description {
+  String _description(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     switch (widget.level) {
       case 3:
-        return "Você vai ouvir um som e dizer de que lado ele veio: esquerda, centro ou direita.";
+        return l10n.dashboardDescL3;
       case 4:
-        return "Você vai ouvir uma palavra com barulho de fundo e escolher qual foi dita. Treina entender no meio do ruído.";
+        return l10n.dashboardDescL4;
       default:
-        return "Você vai ouvir uma palavra e escolher, entre duas parecidas, qual foi dita. Treina sons que se confundem.";
+        return l10n.dashboardDescL2;
     }
   }
 
@@ -203,8 +213,14 @@ class _TrainingDashboardState extends State<TrainingDashboard>
   void _startLevel2() {
     _isRepeatTrial = false;
     final controller = context.read<GamificationController>();
+    final lang = context.read<LocaleController>().audioLanguageCode;
+    final bankKey = lang == 'en' ? 'level_2_en' : 'level_2';
     final targetDifficulty = 6 - _n2Staircase.current.round();
-    final phoneme = controller.getSmartPhoneme(_audiogramData, targetDifficulty: targetDifficulty);
+    final phoneme = controller.getSmartPhoneme(
+      _audiogramData,
+      targetDifficulty: targetDifficulty,
+      phonemeBankKey: bankKey,
+    );
 
     // Sem audiograma não há personalização — não treinamos "às cegas".
     if (phoneme == null) {
@@ -229,7 +245,7 @@ class _TrainingDashboardState extends State<TrainingDashboard>
     final mainDistractor = stimulus['distractor'] as String;
 
     final List<Map<String, dynamic>> level2Stimuli =
-        List<Map<String, dynamic>>.from(PHONEME_REHAB_DATA['level_2']);
+        List<Map<String, dynamic>>.from(PHONEME_REHAB_DATA[bankKey] ?? PHONEME_REHAB_DATA['level_2']!);
     
     final band = stimulus['freq_band'] as int;
     final candidates = level2Stimuli
@@ -272,10 +288,10 @@ class _TrainingDashboardState extends State<TrainingDashboard>
   void _requireAudiogram() {
     if (!mounted) return;
     setState(() => _isTrainingActive = false);
+    final l10n = AppLocalizations.of(context);
     final msg = _audiogramLoading
-        ? "Carregando seu teste de audição… tente de novo em instantes."
-        : "Faça primeiro o teste de audição. É ele que escolhe os sons "
-            "certos para o seu treino — sem ele, não dá para personalizar.";
+        ? l10n.dashboardNoAudiogramLoading
+        : l10n.dashboardNoAudiogramNeeded;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), duration: const Duration(seconds: 5)),
     );
@@ -285,7 +301,13 @@ class _TrainingDashboardState extends State<TrainingDashboard>
     final controller = context.read<GamificationController>();
     final environments = ['RESTAURANTE', 'TRÂNSITO', 'VENTO'];
 
-    final phoneme = controller.getSmartPhoneme(_audiogramData);
+    final lang = context.read<LocaleController>().audioLanguageCode;
+    final bankKey = lang == 'en' ? 'level_2_en' : 'level_2';
+
+    final phoneme = controller.getSmartPhoneme(
+      _audiogramData,
+      phonemeBankKey: bankKey,
+    );
     if (phoneme == null) {
       _requireAudiogram();
       return;
@@ -308,7 +330,20 @@ class _TrainingDashboardState extends State<TrainingDashboard>
     _playLevel4Stimulus();
   }
 
+  Future<bool> _verifyVolume() async {
+    final atLevel = await AudioAccessibility.isAtReferenceVolume();
+    if (!mounted) return false;
+    if (!atLevel) {
+      setState(() {
+        _volumeDriftWarning = true;
+      });
+      return false;
+    }
+    return true;
+  }
+
   Future<void> _playLevel4Stimulus() async {
+    if (!await _verifyVolume()) return;
     if (_currentStimulus == null) return;
     await AudioServiceManager().engine.playCocktailStimulus(
           text: _currentStimulus!['target'],
@@ -341,10 +376,11 @@ class _TrainingDashboardState extends State<TrainingDashboard>
       });
     }
 
+    final l10n = AppLocalizations.of(context);
     if (isCorrect) {
       _feedbackAnim.forward(from: 0);
       setState(() {
-        _feedbackMsg = "Isso! Você ouviu certo.";
+        _feedbackMsg = l10n.dashboardFeedbackCorrect;
         _feedbackPositive = true;
         if (!_isRepeatTrial) {
           controller.addAcuityXP(1.0, [target[0].toLowerCase()]);
@@ -360,7 +396,7 @@ class _TrainingDashboardState extends State<TrainingDashboard>
       setState(() {
         _isRepeatTrial = true;
         _extraBoost += 3.0;
-        _feedbackMsg = "Quase. A palavra era \"$target\". Ouça de novo.";
+        _feedbackMsg = l10n.dashboardFeedbackWrong(target);
         _feedbackPositive = false;
       });
       _playLevel2Stimulus();
@@ -393,10 +429,11 @@ class _TrainingDashboardState extends State<TrainingDashboard>
 
     gamification.addAcuityXP(isCorrect ? 1.0 : 0.0, ['cocktail']);
 
+    final l10n = AppLocalizations.of(context);
     if (isCorrect) {
       _feedbackAnim.forward(from: 0);
       setState(() {
-        _feedbackMsg = "Isso! Mesmo no barulho.";
+        _feedbackMsg = l10n.dashboardFeedbackCorrectNoise;
         _feedbackPositive = true;
       });
       Future.delayed(const Duration(milliseconds: 1100), () {
@@ -405,7 +442,7 @@ class _TrainingDashboardState extends State<TrainingDashboard>
     } else {
       gamification.consumeEnergy();
       setState(() {
-        _feedbackMsg = "Quase. A palavra era \"$target\".";
+        _feedbackMsg = l10n.dashboardFeedbackWrongNoise(target);
         _feedbackPositive = false;
       });
       Future.delayed(const Duration(milliseconds: 1200), () {
@@ -415,7 +452,9 @@ class _TrainingDashboardState extends State<TrainingDashboard>
   }
 
   void _startLevel3() {
-    final stimuli = PHONEME_REHAB_DATA['level_2'] as List;
+    final lang = context.read<LocaleController>().audioLanguageCode;
+    final bankKey = lang == 'en' ? 'level_2_en' : 'level_2';
+    final stimuli = PHONEME_REHAB_DATA[bankKey] as List;
     setState(() {
       _currentStimulus = stimuli[math.Random().nextInt(stimuli.length)];
       final options = [-1.0, 0.0, 1.0];
@@ -428,6 +467,7 @@ class _TrainingDashboardState extends State<TrainingDashboard>
   }
 
   Future<void> _playLevel2Stimulus() async {
+    if (!await _verifyVolume()) return;
     if (_currentStimulus == null) return;
     await AudioServiceManager().engine.playPhonemicStimulus(
           text: _currentStimulus!['target'],
@@ -437,6 +477,7 @@ class _TrainingDashboardState extends State<TrainingDashboard>
   }
 
   Future<void> _playLevel3Stimulus() async {
+    if (!await _verifyVolume()) return;
     if (_currentStimulus == null) return;
     await AudioServiceManager().engine.playSpatialStimulus(
           text: _currentStimulus!['target'],
@@ -485,8 +526,9 @@ class _TrainingDashboardState extends State<TrainingDashboard>
     if (hit) {
       _feedbackAnim.forward(from: 0);
     }
+    final l10n = AppLocalizations.of(context);
     setState(() {
-      _feedbackMsg = hit ? "Isso! Lado certo." : "Quase. Ouça de novo.";
+      _feedbackMsg = hit ? l10n.dashboardFeedbackSideCorrect : l10n.dashboardFeedbackSideWrong;
       _feedbackPositive = hit;
     });
 
@@ -517,11 +559,11 @@ class _TrainingDashboardState extends State<TrainingDashboard>
         elevation: 0,
         centerTitle: true,
         title: Text(
-          _title,
-          style: const TextStyle(
+          _title(context),
+          style: TextStyle(
               color: _textMain, fontSize: 20, fontWeight: FontWeight.w600),
         ),
-        iconTheme: const IconThemeData(color: _textMain),
+        iconTheme: IconThemeData(color: _textMain),
       ),
       body: SafeArea(
         child: Padding(
@@ -531,6 +573,16 @@ class _TrainingDashboardState extends State<TrainingDashboard>
               // Indicador de sessão (acertos/tentativas)
               if (_isTrainingActive) _buildSessionIndicator(),
               const SizedBox(height: 12),
+              if (_volumeDriftWarning)
+                VolumeDriftBanner(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  onResume: () {
+                    if (mounted) {
+                      setState(() => _volumeDriftWarning = false);
+                      _replayCurrent();
+                    }
+                  },
+                ),
               Expanded(
                 child: Center(
                   child: _isTrainingActive
@@ -552,6 +604,7 @@ class _TrainingDashboardState extends State<TrainingDashboard>
   static const int _sessionGoalTrials = 20;
 
   Widget _buildSessionIndicator() {
+    final l10n = AppLocalizations.of(context);
     final accuracy = _totalTrials > 0
         ? (_correctAnswers / _totalTrials * 100).toStringAsFixed(0)
         : '--';
@@ -571,8 +624,8 @@ class _TrainingDashboardState extends State<TrainingDashboard>
               Icon(Icons.check_circle_outline, color: _correct, size: 20),
               const SizedBox(width: 8),
               Text(
-                "$_correctAnswers/$_totalTrials acertos",
-                style: const TextStyle(
+                l10n.dashboardCorrectAnswers("$_correctAnswers", "$_totalTrials"),
+                style: TextStyle(
                     color: _textMain, fontSize: 16, fontWeight: FontWeight.w600),
               ),
               const SizedBox(width: 16),
@@ -586,7 +639,7 @@ class _TrainingDashboardState extends State<TrainingDashboard>
               if (!goalReached) ...[
                 const SizedBox(width: 16),
                 Text(
-                  "${_sessionGoalTrials - _totalTrials} restam",
+                  l10n.dashboardTrialsRemaining("${_sessionGoalTrials - _totalTrials}"),
                   style: TextStyle(color: _textSoft, fontSize: 13),
                 ),
               ],
@@ -603,14 +656,14 @@ class _TrainingDashboardState extends State<TrainingDashboard>
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: _correct.withValues(alpha: 0.4)),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.celebration_rounded, color: Color(0xFF3FB37F), size: 16),
-                  SizedBox(width: 6),
+                  const Icon(Icons.celebration_rounded, color: Color(0xFF3FB37F), size: 16),
+                  const SizedBox(width: 6),
                   Text(
-                    "Meta batida! Pode continuar ou encerrar.",
-                    style: TextStyle(
+                    AppLocalizations.of(context).dashboardGoalReached,
+                    style: const TextStyle(
                         color: Color(0xFF3FB37F),
                         fontSize: 13,
                         fontWeight: FontWeight.w600),
@@ -628,12 +681,12 @@ class _TrainingDashboardState extends State<TrainingDashboard>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.headphones_rounded, color: _textSoft, size: 64),
+          Icon(Icons.headphones_rounded, color: _textSoft, size: 64),
           const SizedBox(height: 20),
           Text(
-            _description,
+            _description(context),
             textAlign: TextAlign.center,
-            style: const TextStyle(color: _textSoft, fontSize: 18, height: 1.5),
+            style: TextStyle(color: _textSoft, fontSize: 18, height: 1.5),
           ),
           const SizedBox(height: 20),
           // Instrução da condição de escuta + confirmação ativa (0.4): a pessoa
@@ -674,14 +727,14 @@ class _TrainingDashboardState extends State<TrainingDashboard>
         children: [
           _replayButton(),
           const SizedBox(height: 16),
-          const Text("Qual palavra você ouviu?",
+          Text(AppLocalizations.of(context).dashboardWhichWord,
               style: TextStyle(color: _textSoft, fontSize: 17)),
           const SizedBox(height: 20),
           Row(
             children: [
-              _wordButton(leftWord, () => onChoice(leftWord)),
+              _wordButton(leftWord, _volumeDriftWarning ? null : () => onChoice(leftWord)),
               const SizedBox(width: 14),
-              _wordButton(rightWord, () => onChoice(rightWord)),
+              _wordButton(rightWord, _volumeDriftWarning ? null : () => onChoice(rightWord)),
             ],
           ),
           const SizedBox(height: 20),
@@ -694,7 +747,7 @@ class _TrainingDashboardState extends State<TrainingDashboard>
         children: [
           _replayButton(),
           const SizedBox(height: 16),
-          const Text("Qual palavra você ouviu?",
+          Text(AppLocalizations.of(context).dashboardWhichWord,
               style: TextStyle(color: _textSoft, fontSize: 17)),
           const SizedBox(height: 20),
           GridView.count(
@@ -707,7 +760,7 @@ class _TrainingDashboardState extends State<TrainingDashboard>
             children: _n2Choices.map((word) {
               return InkWell(
                 borderRadius: BorderRadius.circular(16),
-                onTap: () => _handleN2Choice(word),
+                onTap: _volumeDriftWarning ? null : () => _handleN2Choice(word),
                 child: Container(
                   decoration: BoxDecoration(
                     color: _card,
@@ -718,7 +771,7 @@ class _TrainingDashboardState extends State<TrainingDashboard>
                   child: Text(
                     word,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                         color: _textMain,
                         fontSize: 22,
                         fontWeight: FontWeight.w700),
@@ -745,15 +798,15 @@ class _TrainingDashboardState extends State<TrainingDashboard>
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16)),
         ),
-        onPressed: _replayCurrent,
+        onPressed: _volumeDriftWarning ? null : _replayCurrent,
         icon: const Icon(Icons.volume_up_rounded, size: 28),
-        label: const Text("Ouvir de novo",
-            style: TextStyle(fontSize: 19, fontWeight: FontWeight.w600)),
+        label: Text(AppLocalizations.of(context).dashboardListenAgain,
+            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w600)),
       ),
     );
   }
 
-  Widget _wordButton(String label, VoidCallback onTap) {
+  Widget _wordButton(String label, VoidCallback? onTap) {
     return Expanded(
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
@@ -769,7 +822,7 @@ class _TrainingDashboardState extends State<TrainingDashboard>
           child: Text(
             label,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
                 color: _textMain,
                 fontSize: 26,
                 fontWeight: FontWeight.w700),
@@ -828,19 +881,19 @@ class _TrainingDashboardState extends State<TrainingDashboard>
           children: [
             _replayButton(),
             const SizedBox(height: 24),
-            const Text("De que lado veio o som?",
+            Text(AppLocalizations.of(context).dashboardWhichSide,
                 style: TextStyle(color: _textSoft, fontSize: 18)),
             const SizedBox(height: 24),
             Row(
               children: [
-                _sideButton("Esquerda", Icons.arrow_back_rounded,
-                    () => _handleN3Choice(-1.0)),
+                _sideButton(AppLocalizations.of(context).dashboardSideLeft, Icons.arrow_back_rounded,
+                    _volumeDriftWarning ? null : () => _handleN3Choice(-1.0)),
                 const SizedBox(width: 10),
-                _sideButton("Centro", Icons.circle_outlined,
-                    () => _handleN3Choice(0.0)),
+                _sideButton(AppLocalizations.of(context).dashboardSideCenter, Icons.circle_outlined,
+                    _volumeDriftWarning ? null : () => _handleN3Choice(0.0)),
                 const SizedBox(width: 10),
-                _sideButton("Direita", Icons.arrow_forward_rounded,
-                    () => _handleN3Choice(1.0)),
+                _sideButton(AppLocalizations.of(context).dashboardSideRight, Icons.arrow_forward_rounded,
+                    _volumeDriftWarning ? null : () => _handleN3Choice(1.0)),
               ],
             ),
             const SizedBox(height: 20),
@@ -851,7 +904,7 @@ class _TrainingDashboardState extends State<TrainingDashboard>
     );
   }
 
-  Widget _sideButton(String label, IconData icon, VoidCallback onTap) {
+  Widget _sideButton(String label, IconData icon, VoidCallback? onTap) {
     return Expanded(
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
@@ -869,7 +922,7 @@ class _TrainingDashboardState extends State<TrainingDashboard>
               Icon(icon, color: _primary, size: 30),
               const SizedBox(height: 8),
               Text(label,
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: _textMain,
                       fontSize: 16,
                       fontWeight: FontWeight.w600)),
@@ -886,21 +939,21 @@ class _TrainingDashboardState extends State<TrainingDashboard>
       children: [
         if (context.watch<GamificationController>().neuralEnergy <= 2 &&
             _isTrainingActive)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 12),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
             child: Text(
-              "Bom esforço! Pode continuar ou voltar amanhã.",
-              style: TextStyle(color: Color(0xFFE6A23C), fontSize: 14),
+              AppLocalizations.of(context).dashboardGoodEffort,
+              style: const TextStyle(color: Color(0xFFE6A23C), fontSize: 14),
               textAlign: TextAlign.center,
             ),
           ),
         // Fora do treino, só libera "Começar" depois da confirmação da condição
         // de escuta (com/sem aparelho) — garante teste e treino na mesma condição.
         if (!_isTrainingActive && !_conditionConfirmed)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 8),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
             child: Text(
-              "Confirme a condição acima para começar.",
+              AppLocalizations.of(context).dashboardConfirmCondition,
               style: TextStyle(color: _textSoft, fontSize: 13),
               textAlign: TextAlign.center,
             ),
@@ -922,9 +975,11 @@ class _TrainingDashboardState extends State<TrainingDashboard>
             ),
             onPressed: _isTrainingActive
                 ? _stopAndReport
-                : (_conditionConfirmed ? _startExercise : null),
+                : (_conditionConfirmed && !_volumeDriftWarning ? _startExercise : null),
             child: Text(
-              _isTrainingActive ? "Encerrar treino" : "Começar o treino",
+              _isTrainingActive
+                  ? AppLocalizations.of(context).dashboardEndTraining
+                  : AppLocalizations.of(context).dashboardStartTraining,
               style: const TextStyle(
                   fontSize: 18, fontWeight: FontWeight.w600),
             ),

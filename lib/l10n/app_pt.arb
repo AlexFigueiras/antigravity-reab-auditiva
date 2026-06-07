@@ -1,0 +1,440 @@
+{
+  "@@locale": "pt",
+
+  "appTitle": "BOSYN - Reabilitação Auditiva",
+  "@appTitle": {
+    "description": "Título do app (MaterialApp.title)."},
+
+  "homeYourTrainings": "Seus treinos",
+  "@homeYourTrainings": {
+    "description": "Cabeçalho da seção de treinos na Home."},
+
+  "homeStartWithHearingTest": "Comece pelo teste de audição — ele deixa tudo no seu ritmo.",
+  "@homeStartWithHearingTest": {
+    "description": "Subtítulo da seção de treinos: convida a começar pelo teste de audição."},
+
+  "hearingTestTitle": "Teste de audição",
+  "@hearingTestTitle": {
+    "description": "Título do card do teste de audição (módulo âncora)."},
+
+  "hearingTestSubtitleNew": "Comece por aqui — ele personaliza todo o seu treino.",
+  "hearingTestSubtitleDone": "Concluído. Você pode refazer quando quiser.",
+
+  "speechInNoiseTestTitle": "Teste de fala no barulho",
+  "speechInNoiseTestSubtitle": "Veja o quanto você entende falas no barulho — e acompanhe sua evolução.",
+  "speechInNoiseNeedsHearingTest": "Faça primeiro o teste de audição — ele personaliza o som deste teste.",
+
+  "level2Title": "Distinguir sons parecidos",
+  "level2Subtitle": "Treine sons que se confundem, como \"fala\" e \"sala\".",
+  "level3Title": "De que lado vem o som",
+  "level3Subtitle": "Perceba a direção do som — esquerda, centro, direita.",
+  "level4Title": "Entender no meio do barulho",
+  "level4Subtitle": "Acompanhe a fala mesmo com som de fundo.",
+
+  "sentenceTitle": "Frases do dia a dia",
+  "sentenceSubtitle": "Ajude o Seu João a entender frases inteiras no barulho.",
+
+  "commonStart": "Começar",
+  "commonBack": "Voltar",
+  "commonContinue": "Continuar",
+  "commonYes": "SIM",
+  "commonNo": "NÃO",
+  "commonSaveAndBack": "Salvar e voltar",
+  "commonRetake": "Refazer teste",
+
+  "hearingTestWhichEar": "Qual ouvido você quer testar?",
+  "hearingTestPutHeadphones": "Coloque os fones. Vamos testar um ouvido de cada vez.",
+  "hearingTestLeftEar": "Ouvido esquerdo",
+  "hearingTestRightEar": "Ouvido direito",
+  "hearingTestDidYouHear": "Você ouviu o som?",
+  "hearingTestAdjustVolume": "Ajustar o volume",
+  "hearingTestVolumeCardTitle": "Vamos acertar o nível de som",
+  "hearingTestVolumeCardBody": "Para o teste valer, o som precisa ficar num nível certo — o mesmo dos treinos. Coloque os fones e toque abaixo: vamos ajustar o volume devagar, sem susto.",
+
+  "languageName": "Português",
+  "@languageName": {
+    "description": "Nome do idioma no seletor de idioma, na própria língua."},
+  "settingsLanguage": "Idioma",
+  "@settingsLanguage": {
+    "description": "Rótulo do seletor de idioma."},
+
+  "authWelcomeBack": "Bem-vindo de volta",
+  "authCreateAccount": "Vamos criar sua conta",
+  "authWelcomeSubtitle": "Entre para continuar seu treino auditivo.",
+  "authCreateSubtitle": "É rápido. Depois preparamos tudo no seu ritmo.",
+  "authEmailLabel": "Seu e-mail",
+  "authPasswordLabel": "Sua senha",
+  "authSignIn": "Entrar",
+  "authSignUp": "Criar conta",
+  "authSwitchToSignUp": "Ainda não tem conta? Criar agora",
+  "authSwitchToSignIn": "Já tem conta? Entrar",
+  "authError": "Não foi possível entrar. Confira seu e-mail e senha.",
+  "authSignUpSuccess": "Conta criada! Verifique seu e-mail para confirmar.",
+
+  "logout": "Sair da conta",
+  "@logout": {
+    "description": "Rótulo do botão de logout no menu da Home."},
+
+  "settingsMenuTooltip": "Configurações",
+  "@settingsMenuTooltip": {
+    "description": "Tooltip do botão de menu (⋮) no topo da Home."},
+  "themeUseLight": "Visual claro",
+  "@themeUseLight": {
+    "description": "Opção do menu para ativar o tema claro."},
+  "themeUseDark": "Visual escuro",
+  "@themeUseDark": {
+    "description": "Opção do menu para ativar o tema escuro."},
+
+  "homeGreeting": "Olá!",
+  "homeGreetingSubtitle": "Que bom ter você aqui. Vamos treinar um pouco hoje?",
+
+  "homeProgressTitle": "Sua evolução",
+  "homeProgressLastAccuracy": "Últimos acertos: {percent}%. Toque para ver mais.",
+  "@homeProgressLastAccuracy": {
+    "placeholders": { "percent": { "type": "String" } }},
+  "homeProgressEmpty": "Faça seu primeiro treino para acompanhar aqui.",
+  "homeProgressTapHint": "Toque para ver mais.",
+
+  "homeDailyGoalTitle": "Meta diária (15 min)",
+  "homeDailyGoalDone": "Meta batida! Excelente treino hoje.",
+  "homeDailyGoalProgress": "{minutes} min treinados de 15 min.",
+  "@homeDailyGoalProgress": {
+    "placeholders": { "minutes": { "type": "String" } }},
+
+  "homePermissionTitle": "Vamos preparar o som",
+  "homePermissionBody": "Para tocar os sons do treino e reconhecer seus fones, o app precisa da sua permissão para o microfone e o Bluetooth.",
+  "homePermissionAllow": "Permitir",
+  "homePermissionOpenSettings": "Abrir configurações",
+  "homePermissionDeniedHint": "A permissão foi recusada. Toque acima para abrir as configurações e habilitar manualmente.",
+
+  "homeSavedAudiogram": "Teste salvo! O treino agora é personalizado para você.",
+  "homeSaveAudiogramError": "Erro ao salvar o teste. Tente novamente.",
+  "homeSentenceNeedsAudiogram": "Faça primeiro o teste de audição para liberar este treino.",
+  "homeSelfPerceptionThanks": "Obrigado por compartilhar!",
+
+  "ttsVoiceMissingTitle": "A voz em {voice} não está instalada neste aparelho.",
+  "@ttsVoiceMissingTitle": {
+    "description": "Aviso na Home quando a variante de voz do idioma atual não está instalada no device.",
+    "placeholders": {
+      "voice": {"type": "String", "example": "português do Brasil"}}},
+  "ttsVoiceMissingWhy": "As palavras podem soar com outro sotaque. Instalar a voz certa deixa o treino mais natural.",
+  "ttsVoiceInstallButton": "Instalar a voz",
+  "ttsVoiceMissingIosHint": "Vá em Ajustes › Acessibilidade › Conteúdo falado › Vozes para instalar.",
+  "ttsVoiceRecheck": "Já instalei a voz",
+  "ttsVoiceStillMissing": "Ainda não encontramos a voz. Pode levar um instante após instalar — tente de novo em alguns segundos.",
+  "ttsVoicePtBrName": "português do Brasil",
+  "ttsVoiceEnUsName": "inglês americano",
+
+  "homeLockUnlockHint": "Acerte 70% no \"Distinguir sons\" para liberar. Você está com {percent}%.",
+  "@homeLockUnlockHint": {
+    "placeholders": { "percent": { "type": "String" } }},
+  "homeLockUnlockHintNoProgress": "Acerte 70% no \"Distinguir sons\" para liberar este treino.",
+  "homeLockHowTitle": "Como desbloquear",
+  "homeLockHowBody": "Esse treino é liberado quando você atingir 70% de acertos no \"{name}\" (média das últimas 3 sessões).",
+  "@homeLockHowBody": {
+    "placeholders": { "name": { "type": "String" } }},
+  "homeLockNearlyThere": "Quase lá! Você está com {percent}%.",
+  "@homeLockNearlyThere": {
+    "placeholders": { "percent": { "type": "String" } }},
+  "homeLockKeepGoing": "Você está com {percent}%. Continue treinando!",
+  "@homeLockKeepGoing": {
+    "placeholders": { "percent": { "type": "String" } }},
+  "homeLockNeedSessions": "Faça pelo menos 3 sessões de \"{name}\" para começar a medir seu progresso.",
+  "@homeLockNeedSessions": {
+    "placeholders": { "name": { "type": "String" } }},
+  "homeLockTrainButton": "Treinar \"{name}\"",
+  "@homeLockTrainButton": {
+    "placeholders": { "name": { "type": "String" } }},
+
+  "levelNameL2": "Distinguir sons",
+  "levelNameL3": "De que lado vem o som",
+  "levelNameL4": "Entender no barulho",
+
+  "paywallTitle": "Treino completo",
+  "paywallBody": "O treino de frases do dia a dia faz parte da assinatura. Assim você treina de ponta a ponta, no seu ritmo.",
+  "paywallSubscribeButton": "Assinar",
+
+  "progressBarCurrentLabel": "{percent}% atual",
+  "@progressBarCurrentLabel": {
+    "placeholders": { "percent": { "type": "String" } }},
+  "progressBarTargetLabel": "Meta: {percent}%",
+  "@progressBarTargetLabel": {
+    "placeholders": { "percent": { "type": "String" } }},
+
+  "thresholdTestTitle": "Teste de audição",
+  "thresholdTestWhichEar": "Qual ouvido você quer testar?",
+  "thresholdTestPutHeadphones": "Coloque os fones. Vamos testar um ouvido de cada vez.",
+  "thresholdTestMonoWarningTitle": "Áudio mono está ligado",
+  "thresholdTestMonoWarningBody": "Seu celular está tocando o mesmo som nos dois ouvidos, o que atrapalha o teste. Desligue em:\nConfigurações → Acessibilidade → Áudio → Áudio mono.",
+  "thresholdTestVolumeDriftTitle": "O volume mudou",
+  "thresholdTestVolumeDriftBody": "O nível de som saiu do ponto certo. Para o teste continuar valendo, vamos voltar ao nível e ouvir o som de novo.",
+  "thresholdTestVolumeDriftButton": "Voltar ao nível e continuar",
+  "thresholdTestLeftEarLabel": "◀  OUVIDO ESQUERDO",
+  "thresholdTestRightEarLabel": "OUVIDO DIREITO  ▶",
+  "thresholdTestFamiliarization": "Fase de Familiarização",
+  "thresholdTestPreparing": "Preparando próximo tom...",
+  "thresholdTestListening": "Ouça com atenção...",
+  "thresholdTestDidYouHear": "Você ouviu o som?",
+  "thresholdTestSoundLevel": "Nível de som: {db}",
+  "@thresholdTestSoundLevel": {
+    "placeholders": { "db": { "type": "String" } }},
+  "thresholdTestCatchTrialWarning": "Atenção: Nenhum som foi tocado agora. Por favor, responda apenas quando realmente ouvir o som.",
+  "thresholdTestResults": "Resultado do teste",
+  "thresholdTestViewResult": "Ver resultado",
+  "thresholdTestViewResultOneEar": "Ver resultado (só 1 ouvido testado)",
+  "thresholdTestLeftEar": "Ouvido esquerdo",
+  "thresholdTestRightEar": "Ouvido direito",
+  "thresholdTestEarDone": "Já testado — toque para refazer",
+  "thresholdTestEarTap": "Tocar para testar",
+  "thresholdTestLastResult": "Seu último teste de audição",
+  "thresholdTestDoneOn": "Feito em {date}",
+  "@thresholdTestDoneOn": {
+    "placeholders": { "date": { "type": "String" } }},
+  "thresholdTestBack": "Voltar",
+
+  "dashboardTitleL2": "Distinguir sons",
+  "dashboardTitleL3": "De que lado vem o som",
+  "dashboardTitleL4": "Entender no barulho",
+  "dashboardDescL2": "Você vai ouvir uma palavra e escolher, entre duas parecidas, qual foi dita. Treina sons que se confundem.",
+  "dashboardDescL3": "Você vai ouvir um som e dizer de que lado ele veio: esquerda, centro ou direita.",
+  "dashboardDescL4": "Você vai ouvir uma palavra com barulho de fundo e escolher qual foi dita. Treina entender no meio do ruído.",
+  "dashboardNoAudiogramLoading": "Carregando seu teste de audição… tente de novo em instantes.",
+  "dashboardNoAudiogramNeeded": "Faça primeiro o teste de audição. É ele que escolhe os sons certos para o seu treino — sem ele, não dá para personalizar.",
+  "dashboardFeedbackCorrect": "Isso! Você ouviu certo.",
+  "dashboardFeedbackWrong": "Quase. A palavra era \"{word}\". Ouça de novo.",
+  "@dashboardFeedbackWrong": {
+    "placeholders": { "word": { "type": "String" } }},
+  "dashboardFeedbackCorrectNoise": "Isso! Mesmo no barulho.",
+  "dashboardFeedbackWrongNoise": "Quase. A palavra era \"{word}\".",
+  "@dashboardFeedbackWrongNoise": {
+    "placeholders": { "word": { "type": "String" } }},
+  "dashboardFeedbackSideCorrect": "Isso! Lado certo.",
+  "dashboardFeedbackSideWrong": "Quase. Ouça de novo.",
+  "dashboardGoalReached": "Meta batida! Pode continuar ou encerrar.",
+  "dashboardGoodEffort": "Bom esforço! Pode continuar ou voltar amanhã.",
+  "dashboardConfirmCondition": "Confirme a condição acima para começar.",
+  "dashboardWhichWord": "Qual palavra você ouviu?",
+  "dashboardWhichSide": "De que lado veio o som?",
+  "dashboardSideLeft": "Esquerda",
+  "dashboardSideCenter": "Centro",
+  "dashboardSideRight": "Direita",
+  "dashboardListenAgain": "Ouvir de novo",
+  "dashboardStartTraining": "Começar o treino",
+  "dashboardEndTraining": "Encerrar treino",
+
+  "selfPerceptionQuestion": "Quão bem você acompanhou as conversas esta semana?",
+  "selfPerceptionSubtitle": "Sua resposta nos ajuda a acompanhar seu progresso.",
+  "selfPerceptionVeryHard": "Muito difícil",
+  "selfPerceptionHard": "Difícil",
+  "selfPerceptionSoSo": "Mais ou menos",
+  "selfPerceptionWell": "Bem",
+  "selfPerceptionVeryWell": "Muito bem",
+
+  "listeningModeUnaided": "Sem aparelho",
+  "listeningModeAided": "Com aparelho",
+  "listeningModeUnaided_instruction": "Tire o aparelho auditivo e coloque os fones.",
+  "listeningModeAided_instruction": "Mantenha seu aparelho auditivo ligado, na regulagem de sempre.",
+  "listeningModeUnaided_why": "Assim o app ajusta o som no jeito certo para os seus ouvidos.",
+  "listeningModeAided_why": "Assim o treino combina com o seu dia a dia, em que você usa o aparelho.",
+  "listeningModeUnaided_confirm": "Estou sem o aparelho",
+  "listeningModeAided_confirm": "Estou com o aparelho",
+
+  "progressScreenTitle": "Sua evolução",
+  "progressSessionCount": "{count} sessões",
+  "@progressSessionCount": {
+    "placeholders": { "count": { "type": "String" } }
+  },
+  "progressDaysStreak": "{count} dias seguidos",
+  "@progressDaysStreak": {
+    "placeholders": { "count": { "type": "String" } }
+  },
+  "progressAverage": "Média: {percent}%",
+  "@progressAverage": {
+    "placeholders": { "percent": { "type": "String" } }
+  },
+  "progressModuleDistinguish": "Distinguir sons",
+  "progressModuleDirection": "De que lado",
+  "progressModuleNoise": "No barulho",
+  "progressModuleSession1": "sessão",
+  "progressModuleSessions": "sessões",
+  "progressModuleNoTraining": "Sem treinos",
+  "progressChartTitle": "Acertos ao longo do tempo",
+  "progressHardestTitle": "Sons mais difíceis para você",
+  "progressHardestSubtitle": "Estas foram as palavras que você mais confundiu. Treinar mais ajuda a ouvir melhor.",
+  "progressHardestNoData": "Você ainda não errou palavras suficientes para mostrarmos um padrão. Continue treinando!",
+  "progressChartNoData": "Sem dados de acertos ainda.",
+  "progressNoTrainingsYet": "Ainda não há treinos por aqui.\nFaça seu primeiro treino para acompanhar sua evolução.",
+  "progressOutcomeCardTitle": "Teste de fala no barulho",
+  "progressOutcomeNoHistory": "Você ainda não fez este teste. Ele mostra o quanto você entende falas no barulho e fica registrado aqui para acompanhar sua evolução. Comece pela tela inicial, no card \"Teste de fala no barulho\".",
+  "progressOutcomeSrtLabel": "Limiar de Fala (SRT)",
+  "progressOutcomeChartTitle": "Evolução do Limiar (Menos dB = Melhor)",
+  "progressOutcomeRetakeButton": "Fazer o teste de novo",
+  "progressSrtCardLabel": "Entender no barulho",
+  "progressSrtCardBody": "Esse é o nível de barulho em que você ainda entende as palavras. Quanto menor, melhor!",
+  "progressImprovedBy": "Melhorou {db} dB",
+  "@progressImprovedBy": {
+    "placeholders": { "db": { "type": "String" } }
+  },
+  "progressNoChange": "Sem alteração",
+  "progressSinceStart": "desde o início",
+  "progressMoreTests": "Realize mais testes para ver a evolução.",
+  "progressErrorCount1": "erro",
+  "progressErrorCountN": "erros",
+
+  "onboardingWelcomeTitle": "Bem-vindo ao BOSYN",
+  "onboardingWelcomeBody1": "Este app foi feito para ajudar você a entender melhor as palavras — mesmo no barulho, mesmo ao telefone.",
+  "onboardingWelcomeBody2": "Com alguns minutos de treino por dia, seu cérebro aprende a distinguir sons que ficaram difíceis com o tempo.",
+  "onboardingWelcomeButton": "Vamos começar",
+
+  "onboardingAgeTitle": "Qual é a sua faixa de idade?",
+  "onboardingAgeUnder50": "Menos de 50 anos",
+  "onboardingAge50to65": "50 a 65 anos",
+  "onboardingAge65to75": "65 a 75 anos",
+  "onboardingAgeOver75": "Mais de 75 anos",
+  "onboardingContinue": "Continuar",
+
+  "onboardingDifficultyTitle": "O que mais dificulta sua audição?",
+  "onboardingDifficultySubtitle": "Escolha a que mais combina com você.",
+  "onboardingDifficultyUnderstand": "Entender o que as pessoas falam",
+  "onboardingDifficultyNoise": "Ouvir no barulho (restaurante, TV)",
+  "onboardingDifficultyPhone": "Escutar ao telefone",
+  "onboardingDifficultyDirection": "Perceber de onde vem o som",
+
+  "onboardingHearingAidTitle": "Você usa aparelho auditivo?",
+  "onboardingHearingAidSubtitle": "Isso decide como você vai fazer o teste e os treinos. Use sempre do mesmo jeito.",
+  "onboardingHearingAidYes": "Sim, uso regularmente",
+  "onboardingHearingAidNo": "Não uso aparelho",
+  "onboardingVolumeHint": "Ajuste o volume do seu fone até o tom soar confortável:",
+  "onboardingPlayTone": "Tocar tom de teste",
+  "onboardingEnterApp": "Entrar no app",
+
+  "onboardingSaveError": "Não consegui salvar o teste de audição. Verifique a conexão e refaça em Início.",
+
+  "progressSaveError": "Erro ao salvar o teste. Tente novamente.",
+
+  "outcomeTestTitle": "Teste de fala no barulho",
+  "outcomeTestMatrixTitle": "Teste de Fala no Ruído (Matrix)",
+  "outcomeTestDescription1": "Este teste avalia sua capacidade real de compreender conversas em ambientes barulhentos (efeito coquetel).",
+  "outcomeTestDescription2": "Você ouvirá uma frase no ruído e deverá montá-la selecionando as palavras correspondentes. São 20 frases no total.",
+  "outcomeTestStart": "Começar Teste",
+  "outcomeTestSentenceProgress": "Frase {current} de {total}",
+  "@outcomeTestSentenceProgress": {
+    "placeholders": {
+      "current": { "type": "String" },
+      "total": { "type": "String" }
+    }
+  },
+  "outcomeTestDifficulty": "Dificuldade: {db} dB",
+  "@outcomeTestDifficulty": {
+    "placeholders": { "db": { "type": "String" } }
+  },
+  "outcomeTestListenSentence": "Ouvir Frase",
+  "outcomeTestChooseCategory": "Escolha o {category}:",
+  "@outcomeTestChooseCategory": {
+    "placeholders": { "category": { "type": "String" } }
+  },
+  "outcomeTestScore": "Você acertou {count} de 5 palavras.",
+  "@outcomeTestScore": {
+    "placeholders": { "count": { "type": "String" } }
+  },
+  "outcomeTestNextSentence": "Próxima Frase",
+  "outcomeTestConfirm": "Confirmar",
+  "outcomeTestDone": "Teste Concluído!",
+  "outcomeTestSrtLabel": "Limiar de Fala no Ruído (SRT)",
+  "outcomeTestInterpretGood": "Excelente capacidade de entender falas mesmo no ruído de fundo.",
+  "outcomeTestInterpretMild": "Dificuldade leve. Você consegue entender, mas exige mais esforço mental no ruído.",
+  "outcomeTestInterpretSevere": "Dificuldade moderada a severa. Conversar em restaurantes e festas pode ser muito desafiador.",
+  "outcomeTestBackHome": "Voltar ao Início",
+
+  "missionReportTitle": "Treino concluído!",
+  "missionReportAccuracy": "acertos",
+  "missionReportCorrectLabel": "Acertos",
+  "missionReportAverageTime": "Tempo médio",
+  "missionReportRounds": "Rodadas",
+  "missionReportPracticeMore": "Sons para praticar mais",
+  "missionReportConfusedMost": "Estes foram os que mais confundiram nesta sessão.",
+  "missionReportTipTitle": "Dica de Comunicação",
+  "missionReportTip1Title": "Fique de frente para quem fala",
+  "missionReportTip1Desc": "Olhar diretamente para o rosto da pessoa ajuda seu cérebro a usar a leitura labial para preencher as falhas do som.",
+  "missionReportTip2Title": "Ajuste seus aparelhos auditivos",
+  "missionReportTip2Desc": "Antes de começar o treino ou uma conversa importante, certifique-se de que seus aparelhos estão ligados e regulados no volume confortável.",
+  "missionReportTip3Title": "Peça para falar mais devagar",
+  "missionReportTip3Desc": "Dizer \"fale um pouco mais devagar, por favor\" é mais eficiente do que apenas pedir para falar mais alto.",
+  "missionReportTip4Title": "Reduza os barulhos ao redor",
+  "missionReportTip4Desc": "Em uma conversa, tente desligar a TV ou se afastar de fontes de ruído para facilitar a compreensão da fala.",
+  "missionReportAdaptive90": "Excelente! Seus ouvidos estão cada vez mais afiados.",
+  "missionReportAdaptive70": "Muito bem! Continue assim e o progresso vai aparecer.",
+  "missionReportAdaptive50": "Bom treino! A prática faz a diferença — volte amanhã.",
+  "missionReportAdaptive0": "Todo treino conta. O importante é a constância.",
+  
+  "dashboardCorrectAnswers": "{correct}/{total} acertos",
+  "@dashboardCorrectAnswers": {
+    "placeholders": {
+      "correct": { "type": "String" },
+      "total": { "type": "String" }
+    }
+  },
+  "dashboardTrialsRemaining": "{count} restam",
+  "@dashboardTrialsRemaining": {
+    "placeholders": {
+      "count": { "type": "String" }
+    }
+  },
+
+  "sentenceHubTitle": "Frases do dia a dia",
+  "sentenceHubHeadline": "Ajude o Seu João",
+  "sentenceHubSubtitle": "Ele vai a vários lugares cheios de barulho. Escolha um e ajude o Seu João a entender o que falam com ele.",
+  
+  "envRestaurantTitle": "No restaurante",
+  "envRestaurantSubtitle": "Ajude o Seu João a entender o pedido no meio das conversas.",
+  "envRestaurantOpening": "Tá uma conversa danada aqui. Me ajuda a ouvir o garçom?",
+  
+  "envGymTitle": "Na academia",
+  "envGymSubtitle": "Ajude o Seu João a entender o instrutor com a música alta.",
+  "envGymOpening": "A música tá alta. O que o instrutor falou mesmo?",
+  
+  "envParkTitle": "Na praça",
+  "envParkSubtitle": "Ajude o Seu João a entender quem fala com ele ao ar livre.",
+  "envParkOpening": "Quanta criança! Vamos ver se a gente entende direitinho.",
+  
+  "envMarketTitle": "No mercado",
+  "envMarketSubtitle": "Ajude o Seu João a entender o vendedor na correria da feira.",
+  "envMarketOpening": "Tá cheio hoje. Me ajuda a ouvir o que o moço disse?",
+  
+  "sentenceFeedbackCorrect": "Isso! O Seu João entendeu.",
+  "sentenceFeedbackWrong": "Quase. Era \"{target}\".",
+  "@sentenceFeedbackWrong": {
+    "placeholders": {
+      "target": { "type": "String" }
+    }
+  },
+  "sentenceResultDialogTitle": "Você ajudou bastante o Seu João!",
+  "sentenceResultDialogUnderstood": "Entendi",
+  "sentenceWhichSentence": "Qual frase ele ouviu?",
+  "sentenceNoiseLevel": "Barulho: {db} dB",
+  "@sentenceNoiseLevel": {
+    "placeholders": {
+      "db": { "type": "String" }
+    }
+  },
+  "sentenceTrainingProgress": "Frase {current} de {total}",
+  "@sentenceTrainingProgress": {
+    "placeholders": {
+      "current": { "type": "String" },
+      "total": { "type": "String" }
+    }
+  },
+  "sentenceResultDialogBody": "No {envTitle}, o Seu João entendeu as frases com até {srt} dB de barulho de fundo. Quanto menor esse número, melhor ele ouve no meio do barulho. Continue treinando!",
+  "@sentenceResultDialogBody": {
+    "placeholders": {
+      "envTitle": { "type": "String" },
+      "srt": { "type": "String" }
+    }
+  },
+  "dailyLimitTitle": "Meta diária concluída!",
+  "dailyLimitBody": "Você concluiu as 2 sessões gratuitas de hoje. Praticar diariamente é fundamental para sua reabilitação auditiva. Para continuar treinando hoje, você pode:",
+  "dailyLimitWatchAdButton": "Assistir a um vídeo curto (+2 treinos)",
+  "dailyLimitSubscribeButton": "Assinar Plano Premium",
+  "dailyLimitCancelButton": "Voltar para o início",
+  "dailyLimitLoadingAd": "Carregando o vídeo..."
+}

@@ -1,4 +1,12 @@
 {
     "java.configuration.updateBuildConfiguration": "interactive",
-    "cmake.sourceDirectory": "C:/Users/Alex/antigravity-reab-auditiva/cpp"
+    "cmake.sourceDirectory": "c:/Users/pcDev/ear-training/cpp",
+    "java.import.exclusions": [
+        "**/node_modules/**",
+        "**/.metadata/**",
+        "**/archetype/**",
+        "**/META-INF/maven/**",
+        "**/android/**",
+        "**/antigravity-reab-auditiva/**"
+    ]
 }

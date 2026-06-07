@@ -2,12 +2,16 @@ import 'dart:math' as math;
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:provider/provider.dart';
 import '../audio_engine/audio_engine.dart';
 import '../core/listening_mode.dart';
 import '../models/audiogram.dart';
 import '../services/audio_accessibility.dart';
 import '../services/supabase_service.dart';
+import '../services/theme_controller.dart';
 import '../ui/widgets/listening_mode_banner.dart';
+import '../ui/widgets/volume_drift_banner.dart';
+import '../l10n/gen/app_localizations.dart';
 
 class ThresholdTestScreen extends StatefulWidget {
   const ThresholdTestScreen({super.key});
@@ -54,6 +58,15 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
   // dois ouvidos). Detectamos e avisamos.
   bool _monoAudioOn = false;
 
+  // Volume do sistema: o limiar só é válido se o volume de mídia estiver no
+  // nível de referência fixo (mesmo do teste e dos treinos). Antes de liberar a
+  // escolha da orelha, o usuário ajusta o volume com uma subida suave. Ver
+  // AudioAccessibility.kReferenceVolumeFraction e o plano de trava de volume.
+  bool _volumeReady = false;
+  // Levantado quando, no meio do teste, o usuário baixou o volume pelo botão
+  // físico (não dá pra impedir; dá pra detectar e pausar a medição).
+  bool _volumeDriftWarning = false;
+
   // O teste de tom puro é SEMPRE feito SEM aparelho (a compressão do aparelho
   // invalida o limiar). Exigimos confirmação ativa antes de escolher a orelha. (0.4)
   bool _testConditionConfirmed = false;
@@ -77,8 +90,31 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
       rightEar: [],
     ));
     _checkMonoAudio();
+    _checkVolume();
     _loadSavedAudiogram();
   }
+
+  /// Lê o volume atual ao abrir a tela. Se já estiver no nível de referência,
+  /// libera direto (não força quem já está certo). Caso contrário, o gate de
+  /// volume aparece e o usuário ajusta com a subida suave.
+  Future<void> _checkVolume() async {
+    final atLevel = await AudioAccessibility.isAtReferenceVolume();
+    if (mounted) setState(() => _volumeReady = atLevel);
+  }
+
+  /// "Ajustar volume": faz a subida suave até o nível de referência e libera a
+  /// escolha da orelha. Avisamos antes (no card) que o volume vai subir.
+  Future<void> _prepareVolume() async {
+    await AudioAccessibility.rampToReferenceVolume();
+    if (mounted) {
+      setState(() {
+        _volumeReady = true;
+        _volumeDriftWarning = false;
+      });
+    }
+  }
+
+
 
   @override
   void dispose() {
@@ -138,6 +174,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
   Widget _buildEarChooser() {
     // Espaço para não ficar atrás da AppBar transparente (evita sobreposição
     // do título "Teste de audição" com a pergunta abaixo).
+    final p = context.watch<ThemeController>().palette;
     final topGap = MediaQuery.of(context).padding.top + kToolbarHeight + 16;
     return SafeArea(
       top: false,
@@ -146,17 +183,17 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text(
-              "Qual ouvido você quer testar?",
+            Text(
+              AppLocalizations.of(context).thresholdTestWhichEar,
             textAlign: TextAlign.center,
             style: TextStyle(
-                color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                color: p.textMain, fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          const Text(
-            "Coloque os fones. Vamos testar um ouvido de cada vez.",
+          Text(
+            AppLocalizations.of(context).thresholdTestPutHeadphones,
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white60, fontSize: 16, height: 1.4),
+            style: TextStyle(color: p.textSoft, fontSize: 16, height: 1.4),
           ),
           const SizedBox(height: 28),
 
@@ -170,27 +207,76 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                 border: Border.all(color: const Color(0xFFE11D48)),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: const Column(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(children: [
-                    Icon(Icons.hearing_disabled, color: Color(0xFFFF6B8A)),
-                    SizedBox(width: 10),
+                    const Icon(Icons.hearing_disabled, color: Color(0xFFFF6B8A)),
+                    const SizedBox(width: 10),
                     Expanded(
-                      child: Text("Áudio mono está ligado",
-                          style: TextStyle(
+                      child: Text(AppLocalizations.of(context).thresholdTestMonoWarningTitle,
+                          style: const TextStyle(
                               color: Color(0xFFFF6B8A),
                               fontSize: 16,
                               fontWeight: FontWeight.bold)),
                     ),
                   ]),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   Text(
-                    "Seu celular está tocando o mesmo som nos dois ouvidos, o que "
-                    "atrapalha o teste. Desligue em:\n"
-                    "Configurações → Acessibilidade → Áudio → Áudio mono.",
+                    AppLocalizations.of(context).thresholdTestMonoWarningBody,
                     style: TextStyle(
-                        color: Colors.white70, fontSize: 14, height: 1.45),
+                        color: p.textSoft, fontSize: 14, height: 1.45),
+                  ),
+                ],
+              ),
+            ),
+
+          // Volume de referência: o teste só vale se o "nível de som" estiver no
+          // ponto certo (o mesmo dos treinos). Subimos com aviso e suavemente.
+          if (!_volumeReady)
+            Container(
+              margin: const EdgeInsets.only(bottom: 24),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: p.primary.withValues(alpha: 0.10),
+                border: Border.all(color: p.primary),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Icon(Icons.volume_up, color: p.primary),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(AppLocalizations.of(context).hearingTestVolumeCardTitle,
+                          style: const TextStyle(
+                              color: Color(0xFF9CC2FF),
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold)),
+                    ),
+                  ]),
+                  const SizedBox(height: 8),
+                  Text(
+                    AppLocalizations.of(context).hearingTestVolumeCardBody,
+                    style: TextStyle(
+                        color: p.textSoft, fontSize: 14, height: 1.45),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: p.primary,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: _prepareVolume,
+                      child: Text(AppLocalizations.of(context).hearingTestAdjustVolume,
+                          style: const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w600)),
+                    ),
                   ),
                 ],
               ),
@@ -217,15 +303,15 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
               height: 56,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4F8DF7),
+                  backgroundColor: p.primary,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14)),
                 ),
                 onPressed: _finishTest,
                 child: Text(
                   _completedEars.length == 2
-                      ? "Ver resultado"
-                      : "Ver resultado (só 1 ouvido testado)",
+                      ? AppLocalizations.of(context).thresholdTestViewResult
+                      : AppLocalizations.of(context).thresholdTestViewResultOneEar,
                   style: const TextStyle(
                       fontSize: 17, fontWeight: FontWeight.w600),
                 ),
@@ -238,11 +324,13 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
   }
 
   Widget _earCard(EarSide ear) {
+    final p = context.watch<ThemeController>().palette;
     final isLeft = ear == EarSide.left;
     final done = _completedEars.contains(ear);
     final color = isLeft ? Colors.blueAccent : Colors.redAccent;
-    // Só libera a escolha da orelha após confirmar a condição (sem aparelho).
-    final enabled = _testConditionConfirmed;
+    // Só libera a escolha da orelha após confirmar a condição (sem aparelho) E
+    // ajustar o volume ao nível de referência.
+    final enabled = _testConditionConfirmed && _volumeReady;
     return Opacity(
       opacity: enabled ? 1.0 : 0.45,
       child: InkWell(
@@ -251,7 +339,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: const Color(0xFF1B2128),
+          color: p.card,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: color.withValues(alpha: 0.5), width: 1.5),
         ),
@@ -264,22 +352,26 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(isLeft ? "Ouvido esquerdo" : "Ouvido direito",
-                      style: const TextStyle(
-                          color: Colors.white,
+                  Text(isLeft
+                      ? AppLocalizations.of(context).thresholdTestLeftEar
+                      : AppLocalizations.of(context).thresholdTestRightEar,
+                      style: TextStyle(
+                          color: p.textMain,
                           fontSize: 19,
                           fontWeight: FontWeight.bold)),
                   Text(
-                    done ? "Já testado — toque para refazer" : "Tocar para testar",
+                    done
+                        ? AppLocalizations.of(context).thresholdTestEarDone
+                        : AppLocalizations.of(context).thresholdTestEarTap,
                     style: TextStyle(
-                        color: done ? const Color(0xFF4CAF7D) : Colors.white54,
+                        color: done ? p.correct : p.textSoft,
                         fontSize: 14),
                   ),
                 ],
               ),
             ),
             Icon(done ? Icons.check_circle : Icons.chevron_right,
-                color: done ? const Color(0xFF4CAF7D) : Colors.white38,
+                color: done ? p.correct : p.textSoft,
                 size: 26),
           ],
         ),
@@ -292,46 +384,63 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
     setState(() {
       _isTesting = true;
       _testFinished = false;
-      _currentDb = 40.0; // Inicia em tom de familiarização de 40 dB
+      _currentDb = 70.0; // Familiarização em 70 dB — audível para a maioria sem ser alto demais
       _isFamiliarizing = true;
       _isCatchTrial = false;
       _positiveResponses.clear();
     });
-    _playCurrentTestTone();
+    await _playCurrentTestTone();
   }
 
-  void _playCurrentTestTone() {
+  Future<void> _playCurrentTestTone() async {
     _playbackTimer?.cancel();
+
+    // Vigilância de volume: se o usuário baixou o volume pelo botão físico no
+    // meio do teste, a medição perde o referencial. Pausa e pede para voltar ao
+    // nível antes de tocar o próximo tom (não dá pra impedir o botão; dá pra
+    // proteger a validade do limiar).
+    final atLevel = await AudioAccessibility.isAtReferenceVolume();
+    if (!mounted) return;
+    if (!atLevel) {
+      setState(() {
+        _volumeDriftWarning = true;
+        _isPlayingTone = false;
+      });
+      return;
+    }
+
     setState(() {
       _isPlayingTone = true;
     });
 
+    bool willPlayTone = true;
     if (_isFamiliarizing) {
       _isCatchTrial = false;
-      _engine.playPureTone(
-        frequencyHz: _frequencies[_currentFreqIndex],
-        durationMs: 1500,
-        ear: _currentEar,
-        dbLevel: _currentDb,
-      );
     } else {
       // 20% chance of catch trial, avoiding consecutive catch trials
       if (!_wasLastCatchTrial && math.Random().nextDouble() < 0.20) {
         _isCatchTrial = true;
         _wasLastCatchTrial = true;
+        willPlayTone = false;
         debugPrint("[CATCH_TRIAL] Silence presented at ${_frequencies[_currentFreqIndex]} Hz, $_currentDb dB");
       } else {
         _isCatchTrial = false;
         _wasLastCatchTrial = false;
-        _engine.playPureTone(
-          frequencyHz: _frequencies[_currentFreqIndex],
-          durationMs: 1500,
-          ear: _currentEar,
-          dbLevel: _currentDb,
-        );
       }
     }
 
+    if (willPlayTone) {
+      // Aguarda o engine carregar o sample antes de iniciar o timer de duração.
+      // Sem await, o timer começa antes do som sair → furos de som.
+      await _engine.playPureTone(
+        frequencyHz: _frequencies[_currentFreqIndex],
+        durationMs: 1500,
+        ear: _currentEar,
+        dbLevel: _currentDb,
+      );
+    }
+
+    if (!mounted) return;
     _playbackTimer = Timer(const Duration(milliseconds: 1500), () {
       if (!mounted) return;
       setState(() {
@@ -340,7 +449,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
     });
   }
 
-  void _transitionToNext(VoidCallback stateUpdateAndPlay) {
+  void _transitionToNext(Future<void> Function() stateUpdateAndPlay) {
     _engine.stopTarget();
     _playbackTimer?.cancel();
     _transitionTimer?.cancel();
@@ -348,12 +457,12 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
       _isWaitingForNext = true;
       _isPlayingTone = false;
     });
-    _transitionTimer = Timer(const Duration(milliseconds: 1200), () {
+    _transitionTimer = Timer(const Duration(milliseconds: 600), () {
       if (!mounted) return;
       setState(() {
         _isWaitingForNext = false;
-        stateUpdateAndPlay();
       });
+      stateUpdateAndPlay();
     });
   }
 
@@ -367,8 +476,8 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
         // Falso positivo detectado (ansiedade)
         _showCatchTrialWarning();
       }
-      _transitionToNext(() {
-        _playCurrentTestTone(); // repete ou continua com som real no mesmo nível
+      _transitionToNext(() async {
+        await _playCurrentTestTone(); // repete ou continua com som real no mesmo nível
       });
       return;
     }
@@ -376,20 +485,23 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
     if (_isFamiliarizing) {
       if (detected) {
         // Usuário confirmou que ouviu o tom de familiarização.
-        // Inicia o teste real na orelha atual.
-        _transitionToNext(() {
+        // Começa a busca do limiar 10 dB abaixo do nível em que ouviu,
+        // para não desperdiçar tentativas subindo do zero quando o limiar
+        // já foi revelado pela familiarização.
+        final startDb = (_currentDb - 10.0).clamp(0.0, 110.0);
+        _transitionToNext(() async {
           _isFamiliarizing = false;
-          _currentDb = 40.0; // Começa a busca do limiar a partir de 40 dB
-          _playCurrentTestTone();
+          _currentDb = startDb;
+          await _playCurrentTestTone();
         });
       } else {
         // Não ouviu o tom de familiarização. Aumenta em passos de 10 dB até ouvir ou atingir 120 dB.
         if (_currentDb >= 120.0) {
           _recordThresholdAndNext(120.0);
         } else {
-          _transitionToNext(() {
+          _transitionToNext(() async {
             _currentDb = (_currentDb + 10.0).clamp(-10.0, 120.0);
-            _playCurrentTestTone();
+            await _playCurrentTestTone();
           });
         }
       }
@@ -407,18 +519,18 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
         return;
       }
 
-      _transitionToNext(() {
+      _transitionToNext(() async {
         _currentDb = (_currentDb - 10.0).clamp(-10.0, 120.0);
-        _playCurrentTestTone();
+        await _playCurrentTestTone();
       });
     } else {
       // Erro/Não ouviu: subir 5 dB
       if (_currentDb >= 120.0) {
         _recordThresholdAndNext(120.0);
       } else {
-        _transitionToNext(() {
+        _transitionToNext(() async {
           _currentDb = (_currentDb + 5.0).clamp(-10.0, 120.0);
-          _playCurrentTestTone();
+          await _playCurrentTestTone();
         });
       }
     }
@@ -428,14 +540,14 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Row(
+        content: Row(
           children: [
-            Icon(Icons.info_outline, color: Colors.amberAccent),
-            SizedBox(width: 12),
+            const Icon(Icons.info_outline, color: Colors.amberAccent),
+            const SizedBox(width: 12),
             Expanded(
               child: Text(
-                "Atenção: Nenhum som foi tocado agora. Por favor, responda apenas quando realmente ouvir o som.",
-                style: TextStyle(color: Colors.white, fontSize: 14),
+                AppLocalizations.of(context).thresholdTestCatchTrialWarning,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
               ),
             ),
           ],
@@ -462,13 +574,13 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
     
     if (_currentFreqIndex < _frequencies.length - 1) {
       // Próxima frequência na mesma orelha
-      _transitionToNext(() {
+      _transitionToNext(() async {
         _currentFreqIndex++;
-        _currentDb = 40.0;
+        _currentDb = 70.0;
         _isFamiliarizing = true;
         _positiveResponses.clear();
         _isCatchTrial = false;
-        _playCurrentTestTone();
+        await _playCurrentTestTone();
       });
     } else {
       // Terminou esta orelha. Volta para a escolha
@@ -560,20 +672,21 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
 
   /// Legenda do gráfico (azul = esquerdo, vermelho = direito).
   Widget _chartLegend() {
+    final p = context.watch<ThemeController>().palette;
     Widget dot(Color c, String label) => Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(width: 14, height: 14, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
             const SizedBox(width: 8),
-            Text(label, style: const TextStyle(color: Colors.white70, fontSize: 14)),
+            Text(label, style: TextStyle(color: p.textSoft, fontSize: 14)),
           ],
         );
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        dot(Colors.blueAccent, "Ouvido esquerdo"),
+        dot(Colors.blueAccent, AppLocalizations.of(context).thresholdTestLeftEar),
         const SizedBox(width: 28),
-        dot(Colors.redAccent, "Ouvido direito"),
+        dot(Colors.redAccent, AppLocalizations.of(context).thresholdTestRightEar),
       ],
     );
   }
@@ -581,6 +694,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
   /// Tela de resultado do teste já salvo: mostra o gráfico do último teste e
   /// um botão "Refazer teste" embaixo.
   Widget _buildSavedResult() {
+    final p = context.watch<ThemeController>().palette;
     final saved = _savedAudiogram!;
     final topGap = MediaQuery.of(context).padding.top + kToolbarHeight + 16;
     final d = saved.date;
@@ -592,16 +706,16 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
         padding: EdgeInsets.fromLTRB(16, topGap, 16, 32),
         child: Column(
           children: [
-            const Text(
-              "Seu último teste de audição",
+            Text(
+              AppLocalizations.of(context).thresholdTestLastResult,
               textAlign: TextAlign.center,
               style: TextStyle(
-                  color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                  color: p.textMain, fontSize: 22, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 6),
             Text(
-              "Feito em $dataStr",
-              style: const TextStyle(color: Colors.white54, fontSize: 15),
+              AppLocalizations.of(context).thresholdTestDoneOn(dataStr),
+              style: TextStyle(color: p.textSoft, fontSize: 15),
             ),
             const SizedBox(height: 24),
             _audiogramChart(saved.leftEar, saved.rightEar),
@@ -613,14 +727,14 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
               height: 60,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
+                  backgroundColor: p.primary,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16)),
                 ),
                 onPressed: _retakeTest,
                 icon: const Icon(Icons.refresh, color: Colors.white),
-                label: const Text("Refazer teste",
-                    style: TextStyle(
+                label: Text(AppLocalizations.of(context).commonRetake,
+                    style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                         color: Colors.white)),
@@ -629,8 +743,8 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
             const SizedBox(height: 12),
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text("Voltar",
-                  style: TextStyle(color: Colors.white60, fontSize: 16)),
+              child: Text(AppLocalizations.of(context).thresholdTestBack,
+                  style: TextStyle(color: p.textSoft, fontSize: 16)),
             ),
           ],
         ),
@@ -658,28 +772,29 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.watch<ThemeController>().palette;
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0D0F),
+      backgroundColor: p.bg,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: Colors.transparent, 
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
-          "Teste de audição",
-          style: TextStyle(letterSpacing: 1, fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey),
+        title: Text(
+          AppLocalizations.of(context).thresholdTestTitle,
+          style: TextStyle(letterSpacing: 1, fontSize: 16, fontWeight: FontWeight.bold, color: p.textSoft),
         ),
       ),
       body: Container(
         width: double.infinity,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: RadialGradient(
-            center: Alignment(0, -0.5),
+            center: const Alignment(0, -0.5),
             radius: 1.5,
-            colors: [Color(0xFF1E1E24), Color(0xFF0D0D0F)],
+            colors: [p.card, p.bg],
           ),
         ),
         child: _loadingSaved
-            ? const Center(child: CircularProgressIndicator(color: Color(0xFF4F8DF7)))
+            ? Center(child: CircularProgressIndicator(color: p.primary))
             : _showingSavedResult
             ? _buildSavedResult()
             : (!_earChosen && !_testFinished)
@@ -687,6 +802,17 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
             : Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            // Aviso de desvio de volume no meio do teste: o usuário baixou pelo
+            // botão físico. A medição fica em espera até voltar ao nível.
+            if (_volumeDriftWarning)
+              VolumeDriftBanner(
+                onResume: () {
+                  if (mounted) {
+                    setState(() => _volumeDriftWarning = false);
+                    _playCurrentTestTone();
+                  }
+                },
+              ),
             // Indicador grande do ouvido em teste (◀ esquerdo / direito ▶)
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -695,7 +821,9 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                   const Icon(Icons.volume_up, color: Colors.blueAccent, size: 28),
                 const SizedBox(width: 8),
                 Text(
-                  _currentEar == EarSide.left ? "◀  OUVIDO ESQUERDO" : "OUVIDO DIREITO  ▶",
+                  _currentEar == EarSide.left
+                      ? AppLocalizations.of(context).thresholdTestLeftEarLabel
+                      : AppLocalizations.of(context).thresholdTestRightEarLabel,
                   style: TextStyle(
                     color: _currentEar == EarSide.left ? Colors.blueAccent : Colors.redAccent,
                     fontWeight: FontWeight.w900,
@@ -718,9 +846,9 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                   border: Border.all(color: Colors.blueAccent),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Text(
-                  "Fase de Familiarização",
-                  style: TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 12),
+                child: Text(
+                  AppLocalizations.of(context).thresholdTestFamiliarization,
+                  style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontSize: 12),
                 ),
               ),
             // Container de Frequência Moderno com Glow Animado e Feedback de Escuta
@@ -752,11 +880,11 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                 children: [
                   Text(
                     "${_frequencies[_currentFreqIndex]} Hz",
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 64,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -2,
-                      color: Colors.white,
+                      color: p.textMain,
                     ),
                   ),
                 ],
@@ -769,11 +897,11 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 200),
                 child: _isWaitingForNext
-                    ? const Text(
-                        "Preparando próximo tom...",
-                        key: ValueKey("status_preparing"),
+                    ? Text(
+                        AppLocalizations.of(context).thresholdTestPreparing,
+                        key: const ValueKey("status_preparing"),
                         style: TextStyle(
-                          color: Colors.white38,
+                          color: p.textSoft,
                           fontSize: 15,
                           fontStyle: FontStyle.italic,
                         ),
@@ -793,7 +921,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                "Ouça com atenção...",
+                                AppLocalizations.of(context).thresholdTestListening,
                                 style: TextStyle(
                                   color: _earColor.withValues(alpha: 0.9),
                                   fontSize: 15,
@@ -802,11 +930,11 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                               ),
                             ],
                           )
-                        : const Text(
-                            "Você ouviu o som?",
-                            key: ValueKey("status_idle"),
+                        : Text(
+                            AppLocalizations.of(context).thresholdTestDidYouHear,
+                            key: const ValueKey("status_idle"),
                             style: TextStyle(
-                              color: Colors.white70,
+                              color: p.textSoft,
                               fontSize: 15,
                             ),
                           ),
@@ -815,7 +943,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
             const SizedBox(height: 24),
             
             Text(
-              "Nível de som: ${_currentDb.toInt()}",
+              AppLocalizations.of(context).thresholdTestSoundLevel(_currentDb.toInt().toString()),
               style: TextStyle(
                 color: Colors.redAccent.shade100, 
                 fontSize: 22, 
@@ -828,9 +956,9 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
             const SizedBox(height: 48),
 
             if (_testFinished) ...[
-              const Text(
-                "Resultado do teste", 
-                style: TextStyle(fontSize: 18, color: Colors.blueAccent, fontWeight: FontWeight.bold),
+              Text(
+                AppLocalizations.of(context).thresholdTestResults,
+                style: const TextStyle(fontSize: 18, color: Colors.blueAccent, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 24),
               _audiogramChart(_leftEarPoints, _rightEarPoints),
@@ -842,7 +970,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                 height: 60,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
+                    backgroundColor: p.correct,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     elevation: 10,
                   ),
@@ -850,17 +978,17 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                     'left': _leftEarPoints,
                     'right': _rightEarPoints,
                   }), 
-                  child: const Text("Salvar e voltar", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                  child: Text(AppLocalizations.of(context).commonSaveAndBack, style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                 ),
               ),
             ] else ...[
               Text(
-                _isFamiliarizing 
-                    ? "Você ouviu o som de teste?"
-                    : "Você percebeu o estímulo sonoro?", 
+                AppLocalizations.of(context).thresholdTestDidYouHear,
                 style: TextStyle(
-                  fontSize: 18, 
-                  color: (_isWaitingForNext || _isPlayingTone) ? Colors.white24 : Colors.white70, 
+                  fontSize: 18,
+                  color: (_isWaitingForNext || _isPlayingTone)
+                      ? p.textSoft.withValues(alpha: 0.4)
+                      : p.textSoft,
                   fontWeight: FontWeight.w400,
                 ),
               ),
@@ -869,17 +997,17 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                    _ResponseButton(
-                    label: "NÃO", 
-                    color: const Color(0xFF1E1E24), 
-                    textColor: Colors.white60,
-                    onPressed: (_isWaitingForNext || _isPlayingTone) ? null : () => _onResponse(false),
+                    label: AppLocalizations.of(context).commonNo,
+                    color: p.card,
+                    textColor: p.textSoft,
+                    onPressed: (_isWaitingForNext || _isPlayingTone || _volumeDriftWarning) ? null : () => _onResponse(false),
                   ),
                   const SizedBox(width: 40),
                   _ResponseButton(
-                    label: "SIM", 
-                    color: const Color(0xFF2563EB), 
+                    label: AppLocalizations.of(context).commonYes,
+                    color: p.primary,
                     textColor: Colors.white,
-                    onPressed: (_isWaitingForNext || _isPlayingTone) ? null : () => _onResponse(true),
+                    onPressed: (_isWaitingForNext || _isPlayingTone || _volumeDriftWarning) ? null : () => _onResponse(true),
                   ),
                 ],
               ),

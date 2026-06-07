@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/rehab_session.dart';
 import 'supabase_service.dart';
 
@@ -114,5 +115,48 @@ class GatekeeperService {
       debugPrint("Erro ao recarregar assinatura: $e");
       return false;
     }
+  }
+
+  /// Verifica se o usuário atingiu o limite diário de treinos (meta gratuita).
+  /// Usuários Premium (Assinantes) NÃO possuem limite diário.
+  /// Usuários Gratuitos começam com um limite básico de 2 treinos por dia.
+  /// Assistir anúncios premiados (Rewarded Ads) concede bônus de +2 treinos.
+  Future<bool> checkDailyLimitReached() async {
+    // 1. Usuários Premium estão isentos de limites
+    final isPremium = await refreshSubscriptionStatus();
+    if (isPremium) return false;
+
+    // 2. Conta quantas sessões o usuário completou hoje
+    final sessions = await SupabaseService().getAllSessions();
+    final today = DateTime.now();
+    final todayStart = DateTime(today.year, today.month, today.day);
+    // Filtrar apenas sessões de reabilitação (treinos) que ocorreram hoje
+    final todaySessions = sessions.where((s) => s.date.isAfter(todayStart)).toList();
+    final completedCount = todaySessions.length;
+
+    // 3. Lê o bônus de sessões adicionadas por anúncios hoje de SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    final dateKey = "${today.year}_${today.month}_${today.day}";
+    final adBonusKey = 'ad_rewards_unlocked_$dateKey';
+    final rewardedSessions = prefs.getInt(adBonusKey) ?? 0;
+
+    // Limite total permitido hoje = Limite Base (2) + Bônus Assistidos
+    final allowedSessions = 2 + rewardedSessions;
+
+    debugPrint("[GATEKEEPER] Sessões hoje: $completedCount / Permitidas: $allowedSessions (Bônus Ad: $rewardedSessions)");
+
+    return completedCount >= allowedSessions;
+  }
+
+  /// Concede um bônus de +2 treinos ao usuário por assistir a um anúncio completo.
+  Future<void> grantAdRewardSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    final today = DateTime.now();
+    final dateKey = "${today.year}_${today.month}_${today.day}";
+    final adBonusKey = 'ad_rewards_unlocked_$dateKey';
+    
+    final currentBonus = prefs.getInt(adBonusKey) ?? 0;
+    await prefs.setInt(adBonusKey, currentBonus + 2);
+    debugPrint("[GATEKEEPER] Recompensa concedida. Novo bônus hoje: ${currentBonus + 2}");
   }
 }

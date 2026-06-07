@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/listening_mode.dart';
+import '../../l10n/gen/app_localizations.dart';
 
 /// Banner de instrução da condição de escuta (com/sem aparelho), com confirmação
 /// ativa opcional. Pensado para o público idoso: ícone grande, frase curta, alto
@@ -25,9 +26,20 @@ class ListeningModeBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final accent =
         mode.isAided ? const Color(0xFF3FB37F) : const Color(0xFF4F8DF7);
     final showConfirm = confirmed != null && onConfirmedChanged != null;
+
+    final instruction = mode.isAided
+        ? l10n.listeningModeAided_instruction
+        : l10n.listeningModeUnaided_instruction;
+    final why = mode.isAided
+        ? l10n.listeningModeAided_why
+        : l10n.listeningModeUnaided_why;
+    final confirmLabel = mode.isAided
+        ? l10n.listeningModeAided_confirm
+        : l10n.listeningModeUnaided_confirm;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -46,7 +58,7 @@ class ListeningModeBanner extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  mode.instruction,
+                  instruction,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 19,
@@ -59,7 +71,7 @@ class ListeningModeBanner extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            mode.why,
+            why,
             style: const TextStyle(
                 color: Colors.white70, fontSize: 15, height: 1.4),
           ),
@@ -91,7 +103,7 @@ class ListeningModeBanner extends StatelessWidget {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        mode.confirmLabel,
+                        confirmLabel,
                         style: TextStyle(
                           color: confirmed! ? Colors.white : Colors.white70,
                           fontSize: 17,

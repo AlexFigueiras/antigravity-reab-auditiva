@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/sentence_bank.dart';
 import '../../core/environments.dart';
 import '../../models/audiogram.dart';
 import '../../models/rehab_session.dart';
 import '../../services/audio_service_manager.dart';
+import '../../services/locale_controller.dart';
 import '../../services/supabase_service.dart';
 import '../widgets/seu_joao_scene.dart';
 import '../../core/adaptive_staircase.dart';
+import '../../l10n/gen/app_localizations.dart';
+import '../../services/audio_accessibility.dart';
+import '../../services/theme_controller.dart';
+import '../widgets/volume_drift_banner.dart';
 
 /// MÓDULO DE FRASES (Fase 3): compreensão de frases do dia a dia em ruído,
 /// agora dentro da narrativa "Ajude o Seu João" num ambiente específico
@@ -38,6 +44,7 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
   Map<String, String>? _currentSentence;
   List<String> _options = [];
   bool _canRespond = false;
+  bool _volumeDriftWarning = false;
   JoaoMood _mood = JoaoMood.idle;
   String? _feedbackText;
 
@@ -47,13 +54,12 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
   final List<Map<String, String>> _queue = [];
 
   final List<Map<String, dynamic>> _sessionLog = [];
-  final List<double> _reversals = [];
-  bool? _lastCorrect;
+
+  bool _initialized = false;
 
   @override
   void initState() {
     super.initState();
-    _pool = SENTENCE_BANK_BY_ENV[widget.environment.key] ?? allSentences;
     _staircase = AdaptiveStaircase(
       start: 15.0,
       floor: 0.0,
@@ -62,6 +68,19 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
       stepUp: 3.0,
       minReversalsForEstimate: 6,
     );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    _initialized = true;
+    final lang = context.read<LocaleController>().audioLanguageCode;
+    if (lang == 'en') {
+      _pool = SENTENCE_BANK_BY_ENV_EN[widget.environment.key] ?? allSentencesEn;
+    } else {
+      _pool = SENTENCE_BANK_BY_ENV[widget.environment.key] ?? allSentences;
+    }
     _init();
   }
 
@@ -114,7 +133,20 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
     _playStimulus();
   }
 
+  Future<bool> _verifyVolume() async {
+    final atLevel = await AudioAccessibility.isAtReferenceVolume();
+    if (!mounted) return false;
+    if (!atLevel) {
+      setState(() {
+        _volumeDriftWarning = true;
+      });
+      return false;
+    }
+    return true;
+  }
+
   void _playStimulus() async {
+    if (!await _verifyVolume()) return;
     await AudioServiceManager().engine.playCocktailStimulus(
           text: _currentSentence!['target']!,
           snrDb: _currentSnr,
@@ -143,13 +175,14 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
       'correct': isCorrect,
     });
 
+    final l10n = AppLocalizations.of(context);
     setState(() {
       _currentTrial++;
       _canRespond = false;
       _mood = isCorrect ? JoaoMood.happy : JoaoMood.sad;
       _feedbackText = isCorrect
-          ? 'Isso! O Seu João entendeu.'
-          : 'Quase. Era "$target".';
+          ? l10n.sentenceFeedbackCorrect
+          : l10n.sentenceFeedbackWrong(target);
     });
 
     Future.delayed(const Duration(milliseconds: 1300), () {
@@ -196,23 +229,22 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
   }
 
   Future<void> _showResultDialog(double srt) async {
+    final l10n = AppLocalizations.of(context);
+    final p = context.read<ThemeController>().palette;
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1B2128),
-        title: const Text("Você ajudou bastante o Seu João!",
-            style: TextStyle(color: Colors.white, fontSize: 20)),
+        backgroundColor: p.card,
+        title: Text(l10n.sentenceResultDialogTitle,
+            style: TextStyle(color: p.textMain, fontSize: 20)),
         content: Text(
-          "No ${widget.environment.title.toLowerCase()}, o Seu João entendeu as "
-          "frases com até ${srt.toStringAsFixed(0)} dB de barulho de fundo. "
-          "Quanto menor esse número, melhor ele ouve no meio do barulho. "
-          "Continue treinando!",
-          style: const TextStyle(color: Colors.white70, fontSize: 18, height: 1.4),
+          l10n.sentenceResultDialogBody(widget.environment.localizedTitle(context), srt.toStringAsFixed(0)),
+          style: TextStyle(color: p.textSoft, fontSize: 18, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text("Entendi",
+            child: Text(l10n.sentenceResultDialogUnderstood,
                 style: TextStyle(
                     color: widget.environment.color,
                     fontSize: 18,
@@ -226,10 +258,12 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
   @override
   Widget build(BuildContext context) {
     final env = widget.environment;
+    final l10n = AppLocalizations.of(context);
+    final p = context.watch<ThemeController>().palette;
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0D0F),
+      backgroundColor: p.bg,
       appBar: AppBar(
-        title: Text(env.title),
+        title: Text(env.localizedTitle(context)),
         backgroundColor: Colors.transparent,
       ),
       body: Container(
@@ -239,7 +273,7 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
             radius: 1.3,
             colors: [
               env.color.withValues(alpha: 0.18),
-              const Color(0xFF0D0D0F),
+              p.bg,
             ],
           ),
         ),
@@ -248,19 +282,30 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
             padding: const EdgeInsets.all(20.0),
             child: Column(
               children: [
-                _progressRow(env),
+                _progressRow(env, l10n),
+                const SizedBox(height: 12),
+                if (_volumeDriftWarning)
+                  VolumeDriftBanner(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    onResume: () {
+                      if (mounted) {
+                        setState(() => _volumeDriftWarning = false);
+                        _playStimulus();
+                      }
+                    },
+                  ),
                 const Spacer(),
                 SeuJoaoScene(environment: env, mood: _mood),
                 const SizedBox(height: 16),
                 // Fala de abertura / feedback do Seu João.
                 Text(
-                  _feedbackText ?? env.joaoOpening,
+                  _feedbackText ?? env.localizedOpening(context),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: _feedbackText == null
-                        ? Colors.white70
+                        ? p.textSoft
                         : (_mood == JoaoMood.happy
-                            ? const Color(0xFF3FB37F)
+                            ? p.correct
                             : Colors.orangeAccent),
                     fontSize: 18,
                     height: 1.35,
@@ -268,10 +313,10 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                const Text("Qual frase ele ouviu?",
+                Text(l10n.sentenceWhichSentence,
                     style: TextStyle(
                         fontSize: 16,
-                        color: Colors.white54,
+                        color: p.textSoft,
                         fontWeight: FontWeight.w500)),
                 const SizedBox(height: 16),
                 ..._options.map((opt) => Padding(
@@ -280,9 +325,9 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
                         width: double.infinity,
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF1B2128),
+                            backgroundColor: p.card,
                             disabledBackgroundColor:
-                                const Color(0xFF1B2128).withValues(alpha: 0.5),
+                                p.card.withValues(alpha: 0.5),
                             minimumSize: const Size(0, 76),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16),
@@ -290,11 +335,11 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
                                     color: env.color.withValues(alpha: 0.35))),
                           ),
                           onPressed:
-                              _canRespond ? () => _handleResponse(opt) : null,
+                              (_canRespond && !_volumeDriftWarning) ? () => _handleResponse(opt) : null,
                           child: Text(opt,
                               textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                  color: Colors.white,
+                              style: TextStyle(
+                                  color: p.textMain,
                                   fontSize: 21,
                                   fontWeight: FontWeight.bold)),
                         ),
@@ -303,12 +348,12 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
                 const SizedBox(height: 8),
                 // Ouvir de novo (não muda o SNR — só repete a frase).
                 TextButton.icon(
-                  onPressed: _canRespond ? _playStimulus : null,
+                  onPressed: (_canRespond && !_volumeDriftWarning) ? _playStimulus : null,
                   icon: Icon(Icons.replay,
-                      color: _canRespond ? env.color : Colors.white24),
-                  label: Text("Ouvir de novo",
+                      color: (_canRespond && !_volumeDriftWarning) ? env.color : p.textSoft),
+                  label: Text(l10n.dashboardListenAgain,
                       style: TextStyle(
-                          color: _canRespond ? env.color : Colors.white24,
+                          color: (_canRespond && !_volumeDriftWarning) ? env.color : p.textSoft,
                           fontSize: 16)),
                 ),
               ],
@@ -319,11 +364,14 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
     );
   }
 
-  Widget _progressRow(TrainingEnvironment env) {
+  Widget _progressRow(TrainingEnvironment env, AppLocalizations l10n) {
+    final p = context.watch<ThemeController>().palette;
     return Row(
       children: [
-        Text("Frase ${(_currentTrial + 1).clamp(1, _maxTrials)} de $_maxTrials",
-            style: const TextStyle(color: Colors.white60, fontSize: 14)),
+        Text(
+            l10n.sentenceTrainingProgress(
+                "${(_currentTrial + 1).clamp(1, _maxTrials)}", "$_maxTrials"),
+            style: TextStyle(color: p.textSoft, fontSize: 14)),
         const Spacer(),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -331,7 +379,7 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
             color: env.color.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(20),
           ),
-          child: Text("Barulho: ${_currentSnr.toInt()} dB",
+          child: Text(l10n.sentenceNoiseLevel("${_currentSnr.toInt()}"),
               style: TextStyle(
                   color: env.color,
                   fontSize: 13,

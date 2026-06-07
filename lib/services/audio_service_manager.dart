@@ -1,5 +1,6 @@
 import 'package:ear_training/audio_engine/audio_engine.dart';
 import 'package:flutter/foundation.dart';
+import 'audio_accessibility.dart';
 import 'listening_mode_service.dart';
 
 /// Centralizador do Gerenciamento de Áudio [ORQUESTRADOR]
@@ -35,6 +36,11 @@ class AudioServiceManager {
     await ListeningModeService().load();
     _engine.setListeningMode(ListeningModeService().cached);
     await _engine.initializeEngine(audiogram);
+    // Mesmo referencial de volume do teste de audição: sem isto, o limiar foi
+    // medido num nível e o treino tocaria noutro, desalinhando a personalização
+    // (ganho de meia-perda). Subida suave até o nível de referência. Ver
+    // AudioAccessibility.kReferenceVolumeFraction.
+    await AudioAccessibility.rampToReferenceVolume();
   }
 
   /// Liberação absoluta de memória [NATIVE-DSP-FFI]

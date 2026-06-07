@@ -185,6 +185,11 @@ Definir quem ajudamos, o que tratamos e como medimos. ✅ feito ao ler isto.
 - ✅ **Autopercepção semanal** (1–5), pergunta a cada 7 dias, salva em `self_perception`.
 - ✅ Acessibilidade: fontes 10% maiores, densidade confortável.
 
+### Fase 4 — Monetização Inteligente (Implantada)
+- ✅ **Limite Diário de Treinos**: Usuários gratuitos são limitados a 2 treinos por dia (níveis 2, 3 e 4). Os testes clínicos permanecem ilimitados.
+- ✅ **Integração com AdMob**: Exibição de anúncios em vídeo premiados (Rewarded Ads) para conceder +2 treinos diários extras ao usuário que assistir ao vídeo completo.
+- ✅ **Bypass Premium**: Assinantes têm acesso ilimitado a todos os treinos sem propagandas.
+
 ### Pendências técnicas herdadas (de auditorias anteriores)
 - [ ] Integração real do pagamento (Stripe) — hoje o paywall não concede acesso
       (correto), mas falta o fluxo verdadeiro via webhook no backend.

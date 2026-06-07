@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
+import '../../l10n/gen/app_localizations.dart';
+import '../../services/locale_controller.dart';
+import '../../services/theme_controller.dart';
+import '../theme/app_palette.dart';
 import 'home_screen.dart';
 
 /// Tela de entrada: simples e acolhedora (ver PRODUTO.md §5 e §7).
@@ -16,13 +21,16 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _isLoading = false;
   bool _isSignUp = false;
 
-  static const Color _bg = Color(0xFF101418);
-  static const Color _field = Color(0xFF1B2128);
-  static const Color _primary = Color(0xFF4F8DF7);
-  static const Color _textMain = Color(0xFFF2F4F7);
-  static const Color _textSoft = Color(0xFFB4BCC8);
+  AppPalette get _p => context.watch<ThemeController>().palette;
+  Color get _bg => _p.bg;
+  Color get _card => _p.card;
+  Color get _field => _p.card;
+  Color get _primary => _p.primary;
+  Color get _textMain => _p.textMain;
+  Color get _textSoft => _p.textSoft;
 
   Future<void> _handleAuth() async {
+    final l10n = AppLocalizations.of(context);
     setState(() => _isLoading = true);
     final supabase = Supabase.instance.client;
 
@@ -40,7 +48,7 @@ class _AuthScreenState extends State<AuthScreen> {
             'created_at': DateTime.now().toIso8601String(),
           });
           if (mounted) {
-            _showSnackbar("Conta criada! Verifique seu e-mail para confirmar.");
+            _showSnackbar(l10n.authSignUpSuccess);
           }
         }
       } else {
@@ -56,7 +64,7 @@ class _AuthScreenState extends State<AuthScreen> {
       }
     } catch (e) {
       if (mounted) {
-        _showSnackbar("Não foi possível entrar. Confira seu e-mail e senha.");
+        _showSnackbar(l10n.authError);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -67,8 +75,52 @@ class _AuthScreenState extends State<AuthScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  void _showLanguageSheet(BuildContext context) {
+    final controller = context.read<LocaleController>();
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: _card,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              Text(AppLocalizations.of(context).settingsLanguage,
+                  style: TextStyle(
+                      color: _textMain,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              ListTile(
+                leading: Icon(Icons.check, color: _primary, size: 20),
+                title: Text("Português", style: TextStyle(color: _textMain)),
+                onTap: () {
+                  controller.setLocale(const Locale('pt'));
+                  Navigator.of(sheetContext).pop();
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.check, color: _primary, size: 20),
+                title: Text("English", style: TextStyle(color: _textMain)),
+                onTap: () {
+                  controller.setLocale(const Locale('en'));
+                  Navigator.of(sheetContext).pop();
+                },
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: _bg,
       body: SafeArea(
@@ -78,16 +130,28 @@ class _AuthScreenState extends State<AuthScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildLogo(),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () => _showLanguageSheet(context),
+                    icon: Icon(Icons.language, color: _textSoft, size: 20),
+                    label: Text(
+                      l10n.languageName,
+                      style: TextStyle(color: _textSoft, fontSize: 14),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _buildLogo(l10n),
                 const SizedBox(height: 48),
-                _buildTextField("Seu e-mail", _emailController,
+                _buildTextField(l10n.authEmailLabel, _emailController,
                     keyboardType: TextInputType.emailAddress),
                 const SizedBox(height: 20),
-                _buildTextField("Sua senha", _passwordController, obscure: true),
+                _buildTextField(l10n.authPasswordLabel, _passwordController, obscure: true),
                 const SizedBox(height: 32),
-                _buildAuthButton(),
+                _buildAuthButton(l10n),
                 const SizedBox(height: 12),
-                _buildToggleMode(),
+                _buildToggleMode(l10n),
               ],
             ),
           ),
@@ -96,23 +160,21 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  Widget _buildLogo() {
+  Widget _buildLogo(AppLocalizations l10n) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Icon(Icons.hearing, color: _primary, size: 56),
+        Icon(Icons.hearing, color: _primary, size: 56),
         const SizedBox(height: 20),
         Text(
-          _isSignUp ? "Vamos criar sua conta" : "Bem-vindo de volta",
-          style: const TextStyle(
+          _isSignUp ? l10n.authCreateAccount : l10n.authWelcomeBack,
+          style: TextStyle(
               color: _textMain, fontSize: 28, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 8),
         Text(
-          _isSignUp
-              ? "É rápido. Depois preparamos tudo no seu ritmo."
-              : "Entre para continuar seu treino auditivo.",
-          style: const TextStyle(color: _textSoft, fontSize: 16, height: 1.4),
+          _isSignUp ? l10n.authCreateSubtitle : l10n.authWelcomeSubtitle,
+          style: TextStyle(color: _textSoft, fontSize: 16, height: 1.4),
         ),
       ],
     );
@@ -124,14 +186,14 @@ class _AuthScreenState extends State<AuthScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label,
-            style: const TextStyle(
+            style: TextStyle(
                 color: _textSoft, fontSize: 15, fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         TextField(
           controller: controller,
           obscureText: obscure,
           keyboardType: keyboardType,
-          style: const TextStyle(color: _textMain, fontSize: 17),
+          style: TextStyle(color: _textMain, fontSize: 17),
           decoration: InputDecoration(
             filled: true,
             fillColor: _field,
@@ -143,7 +205,7 @@ class _AuthScreenState extends State<AuthScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: _primary, width: 2),
+              borderSide: BorderSide(color: _primary, width: 2),
             ),
           ),
         ),
@@ -151,7 +213,7 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  Widget _buildAuthButton() {
+  Widget _buildAuthButton(AppLocalizations l10n) {
     return SizedBox(
       width: double.infinity,
       height: 56,
@@ -169,22 +231,20 @@ class _AuthScreenState extends State<AuthScreen> {
                 height: 24,
                 child: CircularProgressIndicator(
                     color: Colors.white, strokeWidth: 2.5))
-            : Text(_isSignUp ? "Criar conta" : "Entrar",
+            : Text(_isSignUp ? l10n.authSignUp : l10n.authSignIn,
                 style: const TextStyle(
                     fontSize: 17, fontWeight: FontWeight.w600)),
       ),
     );
   }
 
-  Widget _buildToggleMode() {
+  Widget _buildToggleMode(AppLocalizations l10n) {
     return Center(
       child: TextButton(
         onPressed: () => setState(() => _isSignUp = !_isSignUp),
         child: Text(
-          _isSignUp
-              ? "Já tem conta? Entrar"
-              : "Ainda não tem conta? Criar agora",
-          style: const TextStyle(color: _primary, fontSize: 15),
+          _isSignUp ? l10n.authSwitchToSignIn : l10n.authSwitchToSignUp,
+          style: TextStyle(color: _primary, fontSize: 15),
         ),
       ),
     );

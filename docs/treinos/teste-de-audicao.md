@@ -50,6 +50,15 @@ controle de falso positivo. **Triagem relativa, não diagnóstico** (honestidade
 - `_engine.stopTarget()` corta o tom ativo imediatamente ao receber a resposta e nas
   transições; botões ficam desabilitados/cinza durante a emissão e o intervalo (~1.2 s).
 - Amplitude do tom: linear = `10^((dB − 80)/20)`, `_kRefDb = 80` (SYSTEM.md §4.2).
+- **Pré-condição de volume (referencial único):** o que chega ao tímpano é
+  `amplitude digital × volume do sistema × sensibilidade do fone`; o app só controla a
+  primeira. Para o teste valer e bater com os treinos, o volume de mídia é fixado em
+  `AudioAccessibility.kReferenceVolumeFraction` (~85%) — gate de "Ajustar o volume" antes de
+  escolher a orelha (subida suave, com aviso) e vigilância durante o teste (se o usuário baixa
+  pelo botão físico, pausa e pede para voltar ao nível). 85%, não 100%, deixa headroom para o
+  EQ de meia-perda não clipar. Não vira dB HL absoluto — continua triagem relativa, mas o
+  limiar e o ganho passam a viver no mesmo mundo. Mesmo ramp roda no
+  `AudioServiceManager.initializeEngineForUser` (treinos). Ver SYSTEM.md §4.2/§8.
 
 ## Resultado e persistência (contrato importante)
 

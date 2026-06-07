@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/gen/app_localizations.dart';
 
 /// Metadados dos ambientes que o "Seu João" frequenta no treino de frases.
 ///
@@ -38,6 +39,54 @@ class TrainingEnvironment {
     required this.color,
     required this.ambienceAsset,
   });
+
+  String localizedTitle(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    switch (key) {
+      case 'restaurante':
+        return l10n.envRestaurantTitle;
+      case 'academia':
+        return l10n.envGymTitle;
+      case 'praca':
+        return l10n.envParkTitle;
+      case 'mercado':
+        return l10n.envMarketTitle;
+      default:
+        return title;
+    }
+  }
+
+  String localizedSubtitle(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    switch (key) {
+      case 'restaurante':
+        return l10n.envRestaurantSubtitle;
+      case 'academia':
+        return l10n.envGymSubtitle;
+      case 'praca':
+        return l10n.envParkSubtitle;
+      case 'mercado':
+        return l10n.envMarketSubtitle;
+      default:
+        return subtitle;
+    }
+  }
+
+  String localizedOpening(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    switch (key) {
+      case 'restaurante':
+        return l10n.envRestaurantOpening;
+      case 'academia':
+        return l10n.envGymOpening;
+      case 'praca':
+        return l10n.envParkOpening;
+      case 'mercado':
+        return l10n.envMarketOpening;
+      default:
+        return joaoOpening;
+    }
+  }
 }
 
 /// Os 4 ambientes, na ordem em que aparecem no hub.

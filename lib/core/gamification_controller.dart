@@ -55,12 +55,14 @@ class GamificationController extends ChangeNotifier {
   Map<String, dynamic>? getSmartPhoneme(
     List<dynamic> audiogramData, {
     int? targetDifficulty,
+    String phonemeBankKey = 'level_2',
   }) {
     // Sem dados clínicos -> não há personalização possível.
     if (audiogramData.isEmpty) return null;
 
     final List<Map<String, dynamic>> level2Stimuli =
-        List<Map<String, dynamic>>.from(PHONEME_REHAB_DATA['level_2']);
+        List<Map<String, dynamic>>.from(
+            PHONEME_REHAB_DATA[phonemeBankKey] ?? PHONEME_REHAB_DATA['level_2']!);
 
     final hasHighDeadRegion = audiogramData.any(
       (p) => (p['frequency'] == 6000 || p['frequency'] == 8000) && (p['threshold'] as num) >= 70.0

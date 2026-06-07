@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:provider/provider.dart';
+import '../../l10n/gen/app_localizations.dart';
 import '../../models/rehab_session.dart';
 import '../../services/supabase_service.dart';
+import '../../services/theme_controller.dart';
+import '../theme/app_palette.dart';
 import 'outcome_test_screen.dart';
 
 /// Tela de evolução do usuário — visual rico com cards por módulo,
@@ -15,12 +19,13 @@ class ProgressScreen extends StatefulWidget {
 
 class _ProgressScreenState extends State<ProgressScreen>
     with SingleTickerProviderStateMixin {
-  static const _bg = Color(0xFF101418);
-  static const _card = Color(0xFF1B2128);
-  static const _primary = Color(0xFF4F8DF7);
-  static const _textMain = Color(0xFFF2F4F7);
-  static const _textSoft = Color(0xFFB4BCC8);
-  static const _correct = Color(0xFF3FB37F);
+  AppPalette get _p => context.watch<ThemeController>().palette;
+  Color get _bg => _p.bg;
+  Color get _card => _p.card;
+  Color get _primary => _p.primary;
+  Color get _textMain => _p.textMain;
+  Color get _textSoft => _p.textSoft;
+  Color get _correct => _p.correct;
   static const _warn = Color(0xFFE6A23C);
 
   final SupabaseService _supabase = SupabaseService();
@@ -135,13 +140,13 @@ class _ProgressScreenState extends State<ProgressScreen>
       appBar: AppBar(
         backgroundColor: _bg,
         elevation: 0,
-        title: const Text("Sua evolução",
+        title: Text(AppLocalizations.of(context).progressScreenTitle,
             style: TextStyle(
                 color: _textMain, fontSize: 22, fontWeight: FontWeight.bold)),
-        iconTheme: const IconThemeData(color: _textMain),
+        iconTheme: IconThemeData(color: _textMain),
       ),
       body: _loading
-          ? const Center(
+          ? Center(
               child: CircularProgressIndicator(color: _primary))
           : _buildBody(),
     );
@@ -163,8 +168,7 @@ class _ProgressScreenState extends State<ProgressScreen>
               Icon(Icons.show_chart_rounded, color: _textSoft, size: 64),
               const SizedBox(height: 20),
               Text(
-                "Ainda não há treinos por aqui.\nFaça seu primeiro treino para "
-                "acompanhar sua evolução.",
+                AppLocalizations.of(context).progressNoTrainingsYet,
                 textAlign: TextAlign.center,
                 style:
                     TextStyle(color: _textSoft, fontSize: 18, height: 1.4),
@@ -186,7 +190,8 @@ class _ProgressScreenState extends State<ProgressScreen>
           _buildSummaryPanel(),
           const SizedBox(height: 24),
 
-          // Teste de desfecho independente (Matrix)
+          // Histórico do teste de fala no barulho (SRT). O ponto de entrada para
+          // FAZER o teste fica na Home (teste-âncora); aqui mostramos a evolução.
           _buildOutcomeTestCard(),
           const SizedBox(height: 24),
 
@@ -200,7 +205,7 @@ class _ProgressScreenState extends State<ProgressScreen>
           ],
 
           // Gráfico de acertos
-          Text("Acertos ao longo do tempo",
+          Text(AppLocalizations.of(context).progressChartTitle,
               style: TextStyle(
                   color: _textMain,
                   fontSize: 18,
@@ -209,16 +214,14 @@ class _ProgressScreenState extends State<ProgressScreen>
           _buildChart(),
           const SizedBox(height: 24),
 
-          // Sons mais difíceis
-          Text("Sons mais difíceis para você",
+          Text(AppLocalizations.of(context).progressHardestTitle,
               style: TextStyle(
                   color: _textMain,
                   fontSize: 18,
                   fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Text(
-            "Estas foram as palavras que você mais confundiu. Treinar mais "
-            "ajuda a ouvir melhor.",
+            AppLocalizations.of(context).progressHardestSubtitle,
             style: TextStyle(color: _textSoft, fontSize: 14),
           ),
           const SizedBox(height: 16),
@@ -260,15 +263,15 @@ class _ProgressScreenState extends State<ProgressScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _summaryRow(
-                      Icons.calendar_today, "$_totalSessions sessões"),
+                      Icons.calendar_today, AppLocalizations.of(context).progressSessionCount("$_totalSessions")),
                   const SizedBox(height: 10),
                   if (_streak > 0)
                     _summaryRow(
-                        Icons.local_fire_department, "$_streak dias seguidos",
+                        Icons.local_fire_department, AppLocalizations.of(context).progressDaysStreak("$_streak"),
                         color: const Color(0xFFFF6B35)),
                   if (_streak > 0) const SizedBox(height: 10),
                   _summaryRow(Icons.trending_up,
-                      "Média: ${_overallAccuracy.toStringAsFixed(0)}%"),
+                      AppLocalizations.of(context).progressAverage(_overallAccuracy.toStringAsFixed(0))),
                 ],
               ),
             ),
@@ -335,20 +338,21 @@ class _ProgressScreenState extends State<ProgressScreen>
   }
 
   Widget _buildModuleCards() {
+    final l10n = AppLocalizations.of(context);
     final modules = [
       (
         2,
-        "Distinguir sons",
+        l10n.progressModuleDistinguish,
         Icons.graphic_eq,
       ),
       (
         3,
-        "De que lado",
+        l10n.progressModuleDirection,
         Icons.surround_sound,
       ),
       (
         4,
-        "No barulho",
+        l10n.progressModuleNoise,
         Icons.hearing,
       ),
     ];
@@ -417,12 +421,12 @@ class _ProgressScreenState extends State<ProgressScreen>
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    "$count ${count == 1 ? 'sessão' : 'sessões'}",
+                    "$count ${count == 1 ? l10n.progressModuleSession1 : l10n.progressModuleSessions}",
                     style: TextStyle(color: _textSoft, fontSize: 11),
                   ),
                 ] else
                   Text(
-                    "Sem treinos",
+                    l10n.progressModuleNoTraining,
                     style: TextStyle(color: _textSoft, fontSize: 12),
                   ),
               ],
@@ -449,7 +453,7 @@ class _ProgressScreenState extends State<ProgressScreen>
             children: [
               Icon(Icons.hearing, color: _primary, size: 20),
               const SizedBox(width: 10),
-              Text("Entender no barulho",
+              Text(AppLocalizations.of(context).progressSrtCardLabel,
                   style: TextStyle(
                       color: _textSoft,
                       fontSize: 14,
@@ -471,8 +475,7 @@ class _ProgressScreenState extends State<ProgressScreen>
           ),
           const SizedBox(height: 8),
           Text(
-            "Esse é o nível de barulho em que você ainda entende as palavras. "
-            "Quanto menor, melhor!",
+            AppLocalizations.of(context).progressSrtCardBody,
             style: TextStyle(color: _textSoft, fontSize: 14, height: 1.4),
           ),
         ],
@@ -489,7 +492,7 @@ class _ProgressScreenState extends State<ProgressScreen>
           color: _card,
           borderRadius: BorderRadius.circular(14),
         ),
-        child: Text("Sem dados de acertos ainda.",
+        child: Text(AppLocalizations.of(context).progressChartNoData,
             style: TextStyle(color: _textSoft, fontSize: 14)),
       );
     }
@@ -571,8 +574,7 @@ class _ProgressScreenState extends State<ProgressScreen>
           borderRadius: BorderRadius.circular(14),
         ),
         child: Text(
-          "Você ainda não errou palavras suficientes para mostrarmos um padrão. "
-          "Continue treinando!",
+          AppLocalizations.of(context).progressHardestNoData,
           style: TextStyle(color: _textSoft, fontSize: 14),
         ),
       );
@@ -611,7 +613,7 @@ class _ProgressScreenState extends State<ProgressScreen>
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                        "${e.value} ${e.value == 1 ? 'erro' : 'erros'}",
+                        "${e.value} ${e.value == 1 ? AppLocalizations.of(context).progressErrorCount1 : AppLocalizations.of(context).progressErrorCountN}",
                         style: TextStyle(
                             color: _warn,
                             fontSize: 14,
@@ -644,27 +646,28 @@ class _ProgressScreenState extends State<ProgressScreen>
     if (_baselineOutcomeSrt == null || _latestOutcomeSrt == null) {
       return const SizedBox.shrink();
     }
+    final l10n = AppLocalizations.of(context);
     final double diff = _baselineOutcomeSrt! - _latestOutcomeSrt!;
 
     if (diff > 0) {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.arrow_downward, color: _correct, size: 20),
+          Icon(Icons.arrow_downward, color: _correct, size: 20),
           const SizedBox(width: 4),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                "Melhorou ${diff.toStringAsFixed(1)} dB",
-                style: const TextStyle(
+                l10n.progressImprovedBy(diff.toStringAsFixed(1)),
+                style: TextStyle(
                   color: _correct,
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
                 ),
               ),
-              const Text(
-                "desde o início",
+              Text(
+                l10n.progressSinceStart,
                 style: TextStyle(color: _textSoft, fontSize: 11),
               ),
             ],
@@ -676,15 +679,15 @@ class _ProgressScreenState extends State<ProgressScreen>
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Text(
-            "Sem alteração",
+            l10n.progressNoChange,
             style: TextStyle(
               color: _textSoft,
               fontWeight: FontWeight.bold,
               fontSize: 14,
             ),
           ),
-          const Text(
-            "desde o início",
+          Text(
+            l10n.progressSinceStart,
             style: TextStyle(color: _textSoft, fontSize: 11),
           ),
         ],
@@ -706,8 +709,8 @@ class _ProgressScreenState extends State<ProgressScreen>
                   fontSize: 14,
                 ),
               ),
-              const Text(
-                "desde o início",
+              Text(
+                l10n.progressSinceStart,
                 style: TextStyle(color: _textSoft, fontSize: 11),
               ),
             ],
@@ -723,7 +726,7 @@ class _ProgressScreenState extends State<ProgressScreen>
         height: 100,
         alignment: Alignment.center,
         child: Text(
-          "Realize mais testes para ver a evolução.",
+          AppLocalizations.of(context).progressMoreTests,
           style: TextStyle(color: _textSoft, fontSize: 13),
         ),
       );
@@ -827,10 +830,10 @@ class _ProgressScreenState extends State<ProgressScreen>
             children: [
               Row(
                 children: [
-                  const Icon(Icons.assessment, color: _primary, size: 22),
+                  Icon(Icons.assessment, color: _primary, size: 22),
                   const SizedBox(width: 10),
-                  const Text(
-                    "Teste de Fala no Ruído",
+                  Text(
+                    AppLocalizations.of(context).progressOutcomeCardTitle,
                     style: TextStyle(
                       color: _textMain,
                       fontSize: 16,
@@ -839,51 +842,13 @@ class _ProgressScreenState extends State<ProgressScreen>
                   ),
                 ],
               ),
-              if (hasHistory)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _primary.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Text(
-                    "Matrix",
-                    style: TextStyle(
-                      color: _primary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
             ],
           ),
           const SizedBox(height: 12),
           if (!hasHistory) ...[
-            const Text(
-              "Avalie sua capacidade de compreender falas no barulho de forma independente dos treinos (Matrix).",
+            Text(
+              AppLocalizations.of(context).progressOutcomeNoHistory,
               style: TextStyle(color: _textSoft, fontSize: 14, height: 1.45),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _primary,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                onPressed: () async {
-                  await Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const OutcomeTestScreen(),
-                    ),
-                  );
-                  _load(); // recarrega os dados ao voltar
-                },
-                child: const Text("Fazer Teste de Desfecho",
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
-              ),
             ),
           ] else ...[
             Row(
@@ -892,14 +857,14 @@ class _ProgressScreenState extends State<ProgressScreen>
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      "Limiar de Fala (SRT)",
+                    Text(
+                      AppLocalizations.of(context).progressOutcomeSrtLabel,
                       style: TextStyle(color: _textSoft, fontSize: 12),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       "${_latestOutcomeSrt!.toStringAsFixed(1)} dB SNR",
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: _primary,
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
@@ -911,8 +876,8 @@ class _ProgressScreenState extends State<ProgressScreen>
               ],
             ),
             const SizedBox(height: 16),
-            const Text(
-              "Evolução do Limiar (Menos dB = Melhor)",
+            Text(
+              AppLocalizations.of(context).progressOutcomeChartTitle,
               style: TextStyle(
                 color: _textMain,
                 fontSize: 14,
@@ -939,8 +904,8 @@ class _ProgressScreenState extends State<ProgressScreen>
                   );
                   _load();
                 },
-                child: const Text(
-                  "Refazer Teste de Desfecho",
+                child: Text(
+                  AppLocalizations.of(context).progressOutcomeRetakeButton,
                   style: TextStyle(
                     color: _primary,
                     fontSize: 14,

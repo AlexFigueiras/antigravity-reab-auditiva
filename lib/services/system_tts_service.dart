@@ -26,31 +26,54 @@ class SystemTtsService {
   }
 
   late final FlutterTts _tts;
-  List<String> _ptVoices = [];
+  // Vozes disponíveis por idioma (chave = languageCode minúsculo, ex.: 'pt', 'en').
+  // Cache por idioma para suportar i18n: a voz da fala TEM de bater com o idioma
+  // do conteúdo, senão a pronúncia fica errada (ex.: voz inglesa lendo "Sala").
+  final Map<String, List<String>> _voicesByLang = {};
   int _voiceCycleIndex = 0;
-  bool _voicesLoaded = false;
 
-  Future<void> _loadPtVoices() async {
-    if (_voicesLoaded) return;
+  /// True se a variante EXATA da voz (ex.: 'pt-BR') está instalada no device.
+  ///
+  /// Diferente de [_voicesFor], que casa por PREFIXO (qualquer pt serve para não
+  /// ficar mudo): aqui queremos saber se a variante CERTA existe, para avisar o
+  /// usuário quando a fala vai sair com outro sotaque (ex.: pt-PT lendo os pares
+  /// mínimos). Ver docs/i18n.md (disponibilidade de voz no device).
+  ///
+  /// Em falha/plataforma sem suporte retorna `true` — não alarmar à toa; a fala
+  /// continua funcionando na variante disponível.
+  Future<bool> isLocaleInstalled(String localeCode) async {
+    try {
+      final installed = await _tts.isLanguageInstalled(localeCode);
+      return installed == true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Carrega (e cacheia) as vozes do dispositivo para [languageCode] — casa pelo
+  /// prefixo do locale (ex.: 'pt' pega pt-BR/pt-PT; 'en' pega en-US/en-GB...).
+  Future<List<String>> _voicesFor(String languageCode) async {
+    final lang = languageCode.split('-').first.toLowerCase();
+    final cached = _voicesByLang[lang];
+    if (cached != null) return cached;
+
+    List<String> result = [];
     try {
       final voices = await _tts.getVoices;
       if (voices != null) {
-        final List<Map<String, dynamic>> parsedVoices = voices
+        final parsed = voices
             .map((v) => Map<String, dynamic>.from(v as Map))
-            .toList()
             .cast<Map<String, dynamic>>();
-
-        _ptVoices = parsedVoices
-            .where((v) {
-              final locale = (v['locale'] as String?)?.toLowerCase() ?? '';
-              return locale.startsWith('pt-br') || locale.startsWith('pt-pt');
-            })
+        result = parsed
+            .where((v) =>
+                ((v['locale'] as String?)?.toLowerCase() ?? '').startsWith(lang))
             .map((v) => (v['name'] as String?) ?? '')
             .where((name) => name.isNotEmpty)
             .toList();
       }
     } catch (_) {}
-    _voicesLoaded = true;
+    _voicesByLang[lang] = result;
+    return result;
   }
 
   Future<void> _ensureConfigured({
@@ -90,11 +113,11 @@ class SystemTtsService {
     double pitch = 0.0,
     String? voiceName,
   }) async {
-    await _loadPtVoices();
+    final langVoices = await _voicesFor(languageCode);
 
     String? activeVoice = voiceName;
-    if (activeVoice == null && _ptVoices.isNotEmpty) {
-      activeVoice = _ptVoices[_voiceCycleIndex % _ptVoices.length];
+    if (activeVoice == null && langVoices.isNotEmpty) {
+      activeVoice = langVoices[_voiceCycleIndex % langVoices.length];
       _voiceCycleIndex++;
     }
 

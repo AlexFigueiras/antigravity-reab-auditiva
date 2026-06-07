@@ -105,5 +105,82 @@ const Map<String, dynamic> PHONEME_REHAB_DATA = {
     {'target': 'Bata', 'distractor': 'Mata', 'freq_band': 1000, 'type': 'stop_nasal'},
     {'target': 'Tia', 'distractor': 'Mia', 'freq_band': 3000, 'type': 'stop_nasal'},
     {'target': 'Gala', 'distractor': 'Nala', 'freq_band': 1500, 'type': 'stop_nasal'},
-  ]
+  ],
+
+  // ─── ENGLISH MINIMAL PAIRS ─────────────────────────────────────────────────
+  // Source: validated adult auditory-rehabilitation literature (ASHA journals,
+  // Frontiers in Audiology) and MED-EL Minimal Pairs Test repertoire.
+  // Organised by the same freq_band / type taxonomy used for Portuguese so the
+  // engine selects pairs matched to the user's audiogram.
+  'level_2_en': [
+    // --- HIGH ZONE (6 kHz–8 kHz): Sibilants and High Fricatives (s/sh, s/f, ch/sh) ---
+    {'target': 'Sip',   'distractor': 'Ship',  'freq_band': 8000, 'type': 'sibilant'},
+    {'target': 'Seat',  'distractor': 'Sheet', 'freq_band': 8000, 'type': 'sibilant'},
+    {'target': 'Sell',  'distractor': 'Shell', 'freq_band': 8000, 'type': 'sibilant'},
+    {'target': 'Sock',  'distractor': 'Shock', 'freq_band': 8000, 'type': 'sibilant'},
+    {'target': 'Sore',  'distractor': 'Shore', 'freq_band': 8000, 'type': 'sibilant'},
+    {'target': 'Sin',   'distractor': 'Shin',  'freq_band': 8000, 'type': 'sibilant'},
+    {'target': 'Ship',  'distractor': 'Chip',  'freq_band': 6000, 'type': 'sibilant'},
+    {'target': 'Share', 'distractor': 'Chair', 'freq_band': 6000, 'type': 'sibilant'},
+    {'target': 'Shoe',  'distractor': 'Chew',  'freq_band': 6000, 'type': 'sibilant'},
+    {'target': 'Shin',  'distractor': 'Chin',  'freq_band': 6000, 'type': 'sibilant'},
+    {'target': 'Sip',   'distractor': 'Zip',   'freq_band': 8000, 'type': 'voiced_fricative'},
+    {'target': 'Seal',  'distractor': 'Zeal',  'freq_band': 8000, 'type': 'voiced_fricative'},
+    {'target': 'Bus',   'distractor': 'Buzz',  'freq_band': 8000, 'type': 'voiced_fricative'},
+    {'target': 'Sick',  'distractor': 'Thick', 'freq_band': 8000, 'type': 'fricative'},
+    {'target': 'Sing',  'distractor': 'Thing', 'freq_band': 8000, 'type': 'fricative'},
+    {'target': 'Sink',  'distractor': 'Think', 'freq_band': 8000, 'type': 'fricative'},
+    {'target': 'Sum',   'distractor': 'Thumb', 'freq_band': 8000, 'type': 'fricative'},
+    {'target': 'Pass',  'distractor': 'Path',  'freq_band': 8000, 'type': 'fricative'},
+    {'target': 'Bass',  'distractor': 'Bath',  'freq_band': 8000, 'type': 'fricative'},
+    {'target': 'Free',  'distractor': 'Three', 'freq_band': 8000, 'type': 'fricative'},
+    {'target': 'Fin',   'distractor': 'Thin',  'freq_band': 8000, 'type': 'fricative'},
+    {'target': 'Fan',   'distractor': 'Van',   'freq_band': 4000, 'type': 'fricative'},
+    {'target': 'Fine',  'distractor': 'Vine',  'freq_band': 4000, 'type': 'fricative'},
+    {'target': 'Safe',  'distractor': 'Save',  'freq_band': 4000, 'type': 'voiced_fricative'},
+    {'target': 'Life',  'distractor': 'Live',  'freq_band': 4000, 'type': 'voiced_fricative'},
+    {'target': 'Face',  'distractor': 'Vase',  'freq_band': 4000, 'type': 'fricative'},
+    {'target': 'Fought','distractor': 'Thought','freq_band': 8000, 'type': 'fricative'},
+    {'target': 'Half',  'distractor': 'Have',  'freq_band': 4000, 'type': 'voiced_fricative'},
+    {'target': 'Leaf',  'distractor': 'Leave', 'freq_band': 4000, 'type': 'voiced_fricative'},
+    {'target': 'Mouth', 'distractor': 'Mouse', 'freq_band': 8000, 'type': 'fricative'},
+
+    // --- MID ZONE (1 kHz–5 kHz): Plosives, Labio-dentals, Velars ---
+    {'target': 'Bat',   'distractor': 'Pat',   'freq_band': 1000, 'type': 'bilabial'},
+    {'target': 'Bin',   'distractor': 'Pin',   'freq_band': 1000, 'type': 'bilabial'},
+    {'target': 'Bear',  'distractor': 'Pear',  'freq_band': 1000, 'type': 'bilabial'},
+    {'target': 'Tab',   'distractor': 'Tap',   'freq_band': 1000, 'type': 'bilabial'},
+    {'target': 'Pear',  'distractor': 'Bear',  'freq_band': 1000, 'type': 'bilabial'},
+    {'target': 'Tip',   'distractor': 'Dip',   'freq_band': 3000, 'type': 'plosive'},
+    {'target': 'Tan',   'distractor': 'Dan',   'freq_band': 3000, 'type': 'plosive'},
+    {'target': 'Tie',   'distractor': 'Die',   'freq_band': 3000, 'type': 'plosive'},
+    {'target': 'Time',  'distractor': 'Dime',  'freq_band': 3000, 'type': 'plosive'},
+    {'target': 'Tune',  'distractor': 'Dune',  'freq_band': 3000, 'type': 'plosive'},
+    {'target': 'Cap',   'distractor': 'Gap',   'freq_band': 1500, 'type': 'velar'},
+    {'target': 'Curl',  'distractor': 'Girl',  'freq_band': 1500, 'type': 'velar'},
+    {'target': 'Back',  'distractor': 'Bag',   'freq_band': 1500, 'type': 'velar'},
+    {'target': 'Date',  'distractor': 'Gate',  'freq_band': 1500, 'type': 'velar'},
+    {'target': 'Deer',  'distractor': 'Gear',  'freq_band': 1500, 'type': 'velar'},
+    {'target': 'Top',   'distractor': 'Cop',   'freq_band': 3000, 'type': 'plosive'},
+    {'target': 'Torn',  'distractor': 'Corn',  'freq_band': 3000, 'type': 'plosive'},
+    {'target': 'Bat',   'distractor': 'Back',  'freq_band': 3000, 'type': 'plosive'},
+    {'target': 'Led',   'distractor': 'Leg',   'freq_band': 1500, 'type': 'velar'},
+    {'target': 'Mud',   'distractor': 'Mug',   'freq_band': 1500, 'type': 'velar'},
+
+    // --- MID-HIGH ZONE (5 kHz–6 kHz): Mixed sibilants and affricates ---
+    {'target': 'Chip',  'distractor': 'Ship',  'freq_band': 6000, 'type': 'sibilant'},
+    {'target': 'Chair', 'distractor': 'Share', 'freq_band': 6000, 'type': 'sibilant'},
+    {'target': 'Chew',  'distractor': 'Shoe',  'freq_band': 6000, 'type': 'sibilant'},
+    {'target': 'Chin',  'distractor': 'Shin',  'freq_band': 6000, 'type': 'sibilant'},
+
+    // --- CLINICAL EXPANSION: Voicing, Manner, and Nasals ---
+    {'target': 'Mice',  'distractor': 'Nice',  'freq_band': 250,  'type': 'nasal'},
+    {'target': 'Mat',   'distractor': 'Nat',   'freq_band': 250,  'type': 'nasal'},
+    {'target': 'Mine',  'distractor': 'Nine',  'freq_band': 250,  'type': 'nasal'},
+    {'target': 'Map',   'distractor': 'Nap',   'freq_band': 250,  'type': 'nasal'},
+    {'target': 'Reed',  'distractor': 'Weed',  'freq_band': 250,  'type': 'stop_nasal'},
+    {'target': 'Red',   'distractor': 'Wed',   'freq_band': 250,  'type': 'stop_nasal'},
+    {'target': 'Ring',  'distractor': 'Wing',  'freq_band': 250,  'type': 'stop_nasal'},
+    {'target': 'Lay',   'distractor': 'Way',   'freq_band': 250,  'type': 'stop_nasal'},
+  ],
 };

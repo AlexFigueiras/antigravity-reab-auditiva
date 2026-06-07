@@ -1,5 +1,9 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../l10n/gen/app_localizations.dart';
+import '../../services/theme_controller.dart';
+import '../theme/app_palette.dart';
 
 /// Tela de resultado pós-treino — celebratória e baseada em métricas reais.
 ///
@@ -26,34 +30,35 @@ class MissionReportScreen extends StatefulWidget {
 
 class _MissionReportScreenState extends State<MissionReportScreen>
     with TickerProviderStateMixin {
-  static const _bg = Color(0xFF101418);
-  static const _card = Color(0xFF1B2128);
-  static const _primary = Color(0xFF4F8DF7);
-  static const _textMain = Color(0xFFF2F4F7);
-  static const _textSoft = Color(0xFFB4BCC8);
-  static const _correct = Color(0xFF3FB37F);
+  AppPalette get _p => context.watch<ThemeController>().palette;
+  Color get _bg => _p.bg;
+  Color get _card => _p.card;
+  Color get _primary => _p.primary;
+  Color get _textMain => _p.textMain;
+  Color get _textSoft => _p.textSoft;
+  Color get _correct => _p.correct;
   static const _warn = Color(0xFFE6A23C);
 
-  static const List<Map<String, String>> _counselingTips = [
+  List<Map<String, String>> _localizedTips(AppLocalizations l10n) => [
     {
-      'title': 'Fique de frente para quem fala',
-      'description': 'Olhar diretamente para o rosto da pessoa ajuda seu cérebro a usar a leitura labial para preencher as falhas do som.',
+      'title': l10n.missionReportTip1Title,
+      'description': l10n.missionReportTip1Desc,
     },
     {
-      'title': 'Ajuste seus aparelhos auditivos',
-      'description': 'Antes de começar o treino ou uma conversa importante, certifique-se de que seus aparelhos estão ligados e regulados no volume confortável.',
+      'title': l10n.missionReportTip2Title,
+      'description': l10n.missionReportTip2Desc,
     },
     {
-      'title': 'Peça para falar mais devagar',
-      'description': 'Dizer "fale um pouco mais devagar, por favor" é mais eficiente do que apenas pedir para falar mais alto.',
+      'title': l10n.missionReportTip3Title,
+      'description': l10n.missionReportTip3Desc,
     },
     {
-      'title': 'Reduza os barulhos ao redor',
-      'description': 'Em uma conversa, tente desligar a TV ou se afastar de fontes de ruído para facilitar a compreensão da fala.',
+      'title': l10n.missionReportTip4Title,
+      'description': l10n.missionReportTip4Desc,
     },
   ];
 
-  late final Map<String, String> _selectedTip;
+  late final int _selectedTipIndex;
 
   late AnimationController _ringController;
   late AnimationController _fadeController;
@@ -66,7 +71,7 @@ class _MissionReportScreenState extends State<MissionReportScreen>
   @override
   void initState() {
     super.initState();
-    _selectedTip = _counselingTips[math.Random().nextInt(_counselingTips.length)];
+    _selectedTipIndex = math.Random().nextInt(4);
     _ringController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -98,23 +103,23 @@ class _MissionReportScreenState extends State<MissionReportScreen>
     super.dispose();
   }
 
-  String get _levelName {
+  String _levelName(AppLocalizations l10n) {
     switch (widget.level) {
       case 3:
-        return "De que lado vem o som";
+        return l10n.levelNameL3;
       case 4:
-        return "Entender no barulho";
+        return l10n.levelNameL4;
       default:
-        return "Distinguir sons";
+        return l10n.levelNameL2;
     }
   }
 
-  String get _adaptiveMessage {
+  String _adaptiveMessage(AppLocalizations l10n) {
     final pct = (_accuracy * 100).round();
-    if (pct >= 90) return "Excelente! Seus ouvidos estão cada vez mais afiados.";
-    if (pct >= 70) return "Muito bem! Continue assim e o progresso vai aparecer.";
-    if (pct >= 50) return "Bom treino! A prática faz a diferença — volte amanhã.";
-    return "Todo treino conta. O importante é a constância.";
+    if (pct >= 90) return l10n.missionReportAdaptive90;
+    if (pct >= 70) return l10n.missionReportAdaptive70;
+    if (pct >= 50) return l10n.missionReportAdaptive50;
+    return l10n.missionReportAdaptive0;
   }
 
   Color get _ringColor {
@@ -126,6 +131,7 @@ class _MissionReportScreenState extends State<MissionReportScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: _bg,
       body: SafeArea(
@@ -135,7 +141,7 @@ class _MissionReportScreenState extends State<MissionReportScreen>
             children: [
               // Header
               Text(
-                "Treino concluído!",
+                l10n.missionReportTitle,
                 style: TextStyle(
                     color: _textMain,
                     fontSize: 26,
@@ -143,14 +149,14 @@ class _MissionReportScreenState extends State<MissionReportScreen>
               ),
               const SizedBox(height: 6),
               Text(
-                _levelName,
+                _levelName(l10n),
                 style: TextStyle(color: _textSoft, fontSize: 16),
               ),
 
               const SizedBox(height: 36),
 
               // Anel de progresso animado
-              _buildAnimatedRing(),
+              _buildAnimatedRing(l10n),
 
               const SizedBox(height: 28),
 
@@ -179,7 +185,7 @@ class _MissionReportScreenState extends State<MissionReportScreen>
                       const SizedBox(width: 14),
                       Expanded(
                         child: Text(
-                          _adaptiveMessage,
+                          _adaptiveMessage(l10n),
                           style: TextStyle(
                               color: _textMain,
                               fontSize: 16,
@@ -196,7 +202,7 @@ class _MissionReportScreenState extends State<MissionReportScreen>
               // Métricas detalhadas
               FadeTransition(
                 opacity: _fadeAnimation,
-                child: _buildMetricsGrid(),
+                child: _buildMetricsGrid(l10n),
               ),
 
               const SizedBox(height: 24),
@@ -205,7 +211,7 @@ class _MissionReportScreenState extends State<MissionReportScreen>
               if (_getMostMissedPairs().isNotEmpty)
                 FadeTransition(
                   opacity: _fadeAnimation,
-                  child: _buildMostMissed(),
+                  child: _buildMostMissed(l10n),
                 ),
 
               const SizedBox(height: 24),
@@ -213,7 +219,7 @@ class _MissionReportScreenState extends State<MissionReportScreen>
               // Dica de comunicação (Aconselhamento)
               FadeTransition(
                 opacity: _fadeAnimation,
-                child: _buildCounselingCard(),
+                child: _buildCounselingCard(l10n),
               ),
 
               const SizedBox(height: 36),
@@ -231,10 +237,10 @@ class _MissionReportScreenState extends State<MissionReportScreen>
                   ),
                   onPressed: () => Navigator.of(context)
                       .popUntil((route) => route.isFirst),
-                  child: const Text(
-                    "Voltar ao início",
+                  child: Text(
+                    l10n.outcomeTestBackHome,
                     style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                        const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
@@ -245,7 +251,8 @@ class _MissionReportScreenState extends State<MissionReportScreen>
     );
   }
 
-  Widget _buildCounselingCard() {
+  Widget _buildCounselingCard(AppLocalizations l10n) {
+    final selectedTip = _localizedTips(l10n)[_selectedTipIndex];
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -269,14 +276,14 @@ class _MissionReportScreenState extends State<MissionReportScreen>
         children: [
           Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.lightbulb_outline_rounded,
                 color: _primary,
                 size: 26,
               ),
               const SizedBox(width: 10),
               Text(
-                "Dica de Comunicação",
+                l10n.missionReportTipTitle,
                 style: TextStyle(
                   color: _primary,
                   fontSize: 16,
@@ -287,8 +294,8 @@ class _MissionReportScreenState extends State<MissionReportScreen>
           ),
           const SizedBox(height: 12),
           Text(
-            _selectedTip['title']!,
-            style: const TextStyle(
+            selectedTip['title']!,
+            style: TextStyle(
               color: _textMain,
               fontSize: 18,
               fontWeight: FontWeight.w700,
@@ -296,8 +303,8 @@ class _MissionReportScreenState extends State<MissionReportScreen>
           ),
           const SizedBox(height: 6),
           Text(
-            _selectedTip['description']!,
-            style: const TextStyle(
+            selectedTip['description']!,
+            style: TextStyle(
               color: _textSoft,
               fontSize: 15,
               height: 1.4,
@@ -308,7 +315,7 @@ class _MissionReportScreenState extends State<MissionReportScreen>
     );
   }
 
-  Widget _buildAnimatedRing() {
+  Widget _buildAnimatedRing(AppLocalizations l10n) {
     return AnimatedBuilder(
       animation: _ringAnimation,
       builder: (context, child) {
@@ -349,7 +356,7 @@ class _MissionReportScreenState extends State<MissionReportScreen>
                         fontWeight: FontWeight.w800),
                   ),
                   Text(
-                    "acertos",
+                    l10n.missionReportAccuracy,
                     style: TextStyle(color: _textSoft, fontSize: 14),
                   ),
                 ],
@@ -361,7 +368,7 @@ class _MissionReportScreenState extends State<MissionReportScreen>
     );
   }
 
-  Widget _buildMetricsGrid() {
+  Widget _buildMetricsGrid(AppLocalizations l10n) {
     final avgRt = widget.sessionLog.isNotEmpty
         ? (widget.sessionLog
                     .map((e) => (e['rt_ms'] as int?) ?? 0)
@@ -376,21 +383,21 @@ class _MissionReportScreenState extends State<MissionReportScreen>
         _metricCard(
           icon: Icons.check_circle_outline,
           value: "${widget.correctAnswers}/${widget.totalTrials}",
-          label: "Acertos",
+          label: l10n.missionReportCorrectLabel,
           color: _correct,
         ),
         const SizedBox(width: 12),
         _metricCard(
           icon: Icons.timer_outlined,
           value: "${avgRt}s",
-          label: "Tempo médio",
+          label: l10n.missionReportAverageTime,
           color: _primary,
         ),
         const SizedBox(width: 12),
         _metricCard(
           icon: Icons.repeat_rounded,
           value: "${widget.totalTrials}",
-          label: "Rodadas",
+          label: l10n.missionReportRounds,
           color: _warn,
         ),
       ],
@@ -446,19 +453,19 @@ class _MissionReportScreenState extends State<MissionReportScreen>
     return sorted.take(3).toList();
   }
 
-  Widget _buildMostMissed() {
+  Widget _buildMostMissed(AppLocalizations l10n) {
     final missed = _getMostMissedPairs();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "Sons para praticar mais",
+          l10n.missionReportPracticeMore,
           style: TextStyle(
               color: _textMain, fontSize: 17, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 4),
         Text(
-          "Estes foram os que mais confundiram nesta sessão.",
+          l10n.missionReportConfusedMost,
           style: TextStyle(color: _textSoft, fontSize: 14),
         ),
         const SizedBox(height: 12),
@@ -488,7 +495,7 @@ class _MissionReportScreenState extends State<MissionReportScreen>
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      "${e.value} ${e.value == 1 ? 'erro' : 'erros'}",
+                      "${e.value} ${e.value == 1 ? l10n.progressErrorCount1 : l10n.progressErrorCountN}",
                       style: TextStyle(
                           color: _warn,
                           fontSize: 14,

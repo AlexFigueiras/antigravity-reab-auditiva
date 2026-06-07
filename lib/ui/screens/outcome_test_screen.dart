@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../audio_engine/audio_engine.dart';
 import '../../models/audiogram.dart';
 import '../../core/outcome_test_bank.dart';
 import '../../core/adaptive_staircase.dart';
+import '../../l10n/gen/app_localizations.dart';
+import '../../services/audio_accessibility.dart';
+import '../../services/locale_controller.dart';
 import '../../services/supabase_service.dart';
+import '../../services/theme_controller.dart';
+import '../theme/app_palette.dart';
 
 class OutcomeTestScreen extends StatefulWidget {
   const OutcomeTestScreen({super.key});
@@ -13,12 +19,13 @@ class OutcomeTestScreen extends StatefulWidget {
 }
 
 class _OutcomeTestScreenState extends State<OutcomeTestScreen> {
-  static const _bg = Color(0xFF101418);
-  static const _card = Color(0xFF1B2128);
-  static const _primary = Color(0xFF4F8DF7);
-  static const _textMain = Color(0xFFF2F4F7);
-  static const _textSoft = Color(0xFFB4BCC8);
-  static const _correctColor = Color(0xFF3FB37F);
+  AppPalette get _p => context.watch<ThemeController>().palette;
+  Color get _bg => _p.bg;
+  Color get _card => _p.card;
+  Color get _primary => _p.primary;
+  Color get _textMain => _p.textMain;
+  Color get _textSoft => _p.textSoft;
+  Color get _correctColor => _p.correct;
 
   final AudioRehabEngine _engine = AudioRehabEngine();
   final SupabaseService _supabase = SupabaseService();
@@ -66,6 +73,11 @@ class _OutcomeTestScreenState extends State<OutcomeTestScreen> {
       leftEar: [],
       rightEar: [],
     ));
+    // Mesmo referencial de volume do teste de audição e dos treinos: esta tela
+    // inicializa o motor sozinha (não passa pelo AudioServiceManager), então o
+    // ramp precisa ser chamado aqui. Sem isso, o SRT seria medido num volume
+    // possivelmente diferente do teste de audição. Ver SYSTEM.md §4.2.
+    AudioAccessibility.rampToReferenceVolume();
   }
 
   @override
@@ -92,9 +104,12 @@ class _OutcomeTestScreenState extends State<OutcomeTestScreen> {
       return;
     }
 
+    final lang = context.read<LocaleController>().audioLanguageCode;
     setState(() {
       _currentTrial++;
-      _currentSentence = generateRandomMatrixSentence();
+      _currentSentence = lang == 'en'
+          ? generateRandomMatrixSentenceEn()
+          : generateRandomMatrixSentence();
       _selectedName = null;
       _selectedVerb = null;
       _selectedNumber = null;
@@ -213,11 +228,11 @@ class _OutcomeTestScreenState extends State<OutcomeTestScreen> {
       appBar: AppBar(
         backgroundColor: _bg,
         elevation: 0,
-        title: const Text(
-          "Teste de Fala no Ruído",
+        title: Text(
+          AppLocalizations.of(context).outcomeTestTitle,
           style: TextStyle(color: _textMain, fontSize: 18, fontWeight: FontWeight.bold),
         ),
-        iconTheme: const IconThemeData(color: _textMain),
+        iconTheme: IconThemeData(color: _textMain),
       ),
       body: SafeArea(
         child: Container(
@@ -234,25 +249,26 @@ class _OutcomeTestScreenState extends State<OutcomeTestScreen> {
   }
 
   Widget _buildWelcomeView() {
+    final l10n = AppLocalizations.of(context);
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Icon(Icons.hearing, color: _primary, size: 72),
+        Icon(Icons.hearing, color: _primary, size: 72),
         const SizedBox(height: 28),
-        const Text(
-          "Teste de Fala no Ruído (Matrix)",
+        Text(
+          l10n.outcomeTestMatrixTitle,
           style: TextStyle(color: _textMain, fontSize: 24, fontWeight: FontWeight.bold),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 16),
-        const Text(
-          "Este teste avalia sua capacidade real de compreender conversas em ambientes barulhentos (efeito coquetel).",
+        Text(
+          l10n.outcomeTestDescription1,
           style: TextStyle(color: _textSoft, fontSize: 16, height: 1.5),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 12),
-        const Text(
-          "Você ouvirá uma frase no ruído e deverá montá-la selecionando as palavras correspondentes. São 20 frases no total.",
+        Text(
+          l10n.outcomeTestDescription2,
           style: TextStyle(color: _textSoft, fontSize: 15, height: 1.5),
           textAlign: TextAlign.center,
         ),
@@ -266,9 +282,9 @@ class _OutcomeTestScreenState extends State<OutcomeTestScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
             onPressed: _startTest,
-            child: const Text(
-              "Começar Teste",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            child: Text(
+              l10n.outcomeTestStart,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ),
         ),
@@ -277,29 +293,30 @@ class _OutcomeTestScreenState extends State<OutcomeTestScreen> {
   }
 
   Widget _buildTestView() {
-    final categories = ["Nome", "Verbo", "Número", "Objeto", "Cor"];
-    final List<List<String>> vocabularies = [
-      MATRIX_NAMES,
-      MATRIX_VERBS,
-      MATRIX_NUMBERS,
-      MATRIX_NOUNS,
-      MATRIX_ADJECTIVES
-    ];
+    final l10n = AppLocalizations.of(context);
+    final lang = context.read<LocaleController>().audioLanguageCode;
+    final isEn = lang == 'en';
+    final categories = isEn
+        ? ["Name", "Verb", "Number", "Colour", "Object"]
+        : ["Nome", "Verbo", "Número", "Objeto", "Cor"];
+    final List<List<String>> vocabularies = isEn
+        ? [MATRIX_NAMES_EN, MATRIX_VERBS_EN, MATRIX_NUMBERS_EN, MATRIX_ADJECTIVES_EN, MATRIX_NOUNS_EN]
+        : [MATRIX_NAMES, MATRIX_VERBS, MATRIX_NUMBERS, MATRIX_NOUNS, MATRIX_ADJECTIVES];
 
     final currentVocab = vocabularies[_activeCategoryIndex];
 
     return Column(
       children: [
-        // Indicador de progresso
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              "Frase $_currentTrial de $_totalTrials",
-              style: const TextStyle(color: _textSoft, fontSize: 15, fontWeight: FontWeight.w600),
+              l10n.outcomeTestSentenceProgress(
+                _currentTrial.toString(), _totalTrials.toString()),
+              style: TextStyle(color: _textSoft, fontSize: 15, fontWeight: FontWeight.w600),
             ),
             Text(
-              "Dificuldade: ${-_srtStaircase.current.toInt()} dB",
+              l10n.outcomeTestDifficulty((-_srtStaircase.current.toInt()).toString()),
               style: TextStyle(color: _primary.withValues(alpha: 0.8), fontSize: 14, fontWeight: FontWeight.bold),
             ),
           ],
@@ -375,7 +392,7 @@ class _OutcomeTestScreenState extends State<OutcomeTestScreen> {
             ),
             onPressed: _playStimulus,
             icon: const Icon(Icons.volume_up, color: Colors.white70),
-            label: const Text("Ouvir Frase", style: TextStyle(color: Colors.white70, fontSize: 16)),
+            label: Text(l10n.outcomeTestListenSentence, style: const TextStyle(color: Colors.white70, fontSize: 16)),
           ),
         ),
         const SizedBox(height: 28),
@@ -386,8 +403,8 @@ class _OutcomeTestScreenState extends State<OutcomeTestScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                "Escolha o ${categories[_activeCategoryIndex]}:",
-                style: const TextStyle(color: _textMain, fontSize: 16, fontWeight: FontWeight.bold),
+                l10n.outcomeTestChooseCategory(categories[_activeCategoryIndex]),
+                style: TextStyle(color: _textMain, fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               Expanded(
@@ -454,7 +471,7 @@ class _OutcomeTestScreenState extends State<OutcomeTestScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    "Você acertou $_correctWordsInLastTrial de 5 palavras.",
+                    l10n.outcomeTestScore(_correctWordsInLastTrial.toString()),
                     style: TextStyle(
                       color: _correctWordsInLastTrial >= 3 ? _correctColor : Colors.amber,
                       fontWeight: FontWeight.bold,
@@ -475,7 +492,7 @@ class _OutcomeTestScreenState extends State<OutcomeTestScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
               onPressed: _nextTrial,
-              child: const Text("Próxima Frase", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              child: Text(l10n.outcomeTestNextSentence, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             ),
           ),
         ] else ...[
@@ -489,7 +506,7 @@ class _OutcomeTestScreenState extends State<OutcomeTestScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
               onPressed: _isSentenceComplete ? _confirmSentence : null,
-              child: const Text("Confirmar", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+              child: Text(l10n.outcomeTestConfirm, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
             ),
           ),
         ],
@@ -498,23 +515,23 @@ class _OutcomeTestScreenState extends State<OutcomeTestScreen> {
   }
 
   Widget _buildResultView() {
-    // Classificação audiológica simples do SRT
-    String interpretation = "";
+    final l10n = AppLocalizations.of(context);
+    final String interpretation;
     if (_finalSrt <= 0) {
-      interpretation = "Excelente capacidade de entender falas mesmo no ruído de fundo.";
+      interpretation = l10n.outcomeTestInterpretGood;
     } else if (_finalSrt <= 5) {
-      interpretation = "Dificuldade leve. Você consegue entender, mas exige mais esforço mental no ruído.";
+      interpretation = l10n.outcomeTestInterpretMild;
     } else {
-      interpretation = "Dificuldade moderada a severa. Conversar em restaurantes e festas pode ser muito desafiador.";
+      interpretation = l10n.outcomeTestInterpretSevere;
     }
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Icon(Icons.check_circle_outline, color: _correctColor, size: 72),
+        Icon(Icons.check_circle_outline, color: _correctColor, size: 72),
         const SizedBox(height: 28),
-        const Text(
-          "Teste Concluído!",
+        Text(
+          l10n.outcomeTestDone,
           style: TextStyle(color: _textMain, fontSize: 24, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 20),
@@ -527,19 +544,19 @@ class _OutcomeTestScreenState extends State<OutcomeTestScreen> {
           ),
           child: Column(
             children: [
-              const Text(
-                "Limiar de Fala no Ruído (SRT)",
+              Text(
+                l10n.outcomeTestSrtLabel,
                 style: TextStyle(color: _textSoft, fontSize: 15, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
               Text(
                 "${_finalSrt.toStringAsFixed(1)} dB",
-                style: const TextStyle(color: _primary, fontSize: 48, fontWeight: FontWeight.bold),
+                style: TextStyle(color: _primary, fontSize: 48, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               Text(
                 interpretation,
-                style: const TextStyle(color: _textMain, fontSize: 16, height: 1.45),
+                style: TextStyle(color: _textMain, fontSize: 16, height: 1.45),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -555,7 +572,7 @@ class _OutcomeTestScreenState extends State<OutcomeTestScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text("Voltar ao Início", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            child: Text(l10n.outcomeTestBackHome, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           ),
         ),
       ],
