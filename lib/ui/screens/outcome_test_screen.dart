@@ -8,8 +8,6 @@ import '../../l10n/gen/app_localizations.dart';
 import '../../services/audio_accessibility.dart';
 import '../../services/locale_controller.dart';
 import '../../services/supabase_service.dart';
-import '../../services/theme_controller.dart';
-import '../theme/app_palette.dart';
 
 class OutcomeTestScreen extends StatefulWidget {
   const OutcomeTestScreen({super.key});
@@ -19,13 +17,12 @@ class OutcomeTestScreen extends StatefulWidget {
 }
 
 class _OutcomeTestScreenState extends State<OutcomeTestScreen> {
-  AppPalette get _p => context.watch<ThemeController>().palette;
-  Color get _bg => _p.bg;
-  Color get _card => _p.card;
-  Color get _primary => _p.primary;
-  Color get _textMain => _p.textMain;
-  Color get _textSoft => _p.textSoft;
-  Color get _correctColor => _p.correct;
+  ColorScheme get _cs => Theme.of(context).colorScheme;
+  Color get _card => _cs.surface;
+  Color get _primary => _cs.primary;
+  Color get _textMain => _cs.onSurface;
+  Color get _textSoft => _cs.onSurfaceVariant;
+  Color get _correctColor => _cs.tertiary;
 
   final AudioRehabEngine _engine = AudioRehabEngine();
   final SupabaseService _supabase = SupabaseService();
@@ -224,9 +221,8 @@ class _OutcomeTestScreenState extends State<OutcomeTestScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
       appBar: AppBar(
-        backgroundColor: _bg,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text(
           AppLocalizations.of(context).outcomeTestTitle,

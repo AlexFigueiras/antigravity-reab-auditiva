@@ -1,9 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../../l10n/gen/app_localizations.dart';
-import '../../services/theme_controller.dart';
-import '../theme/app_palette.dart';
 
 /// Tela de resultado pós-treino — celebratória e baseada em métricas reais.
 ///
@@ -30,13 +27,12 @@ class MissionReportScreen extends StatefulWidget {
 
 class _MissionReportScreenState extends State<MissionReportScreen>
     with TickerProviderStateMixin {
-  AppPalette get _p => context.watch<ThemeController>().palette;
-  Color get _bg => _p.bg;
-  Color get _card => _p.card;
-  Color get _primary => _p.primary;
-  Color get _textMain => _p.textMain;
-  Color get _textSoft => _p.textSoft;
-  Color get _correct => _p.correct;
+  ColorScheme get _cs => Theme.of(context).colorScheme;
+  Color get _card => _cs.surface;
+  Color get _primary => _cs.primary;
+  Color get _textMain => _cs.onSurface;
+  Color get _textSoft => _cs.onSurfaceVariant;
+  Color get _correct => _cs.tertiary;
   static const _warn = Color(0xFFE6A23C);
 
   List<Map<String, String>> _localizedTips(AppLocalizations l10n) => [
@@ -133,7 +129,6 @@ class _MissionReportScreenState extends State<MissionReportScreen>
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
-      backgroundColor: _bg,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 40, 24, 32),

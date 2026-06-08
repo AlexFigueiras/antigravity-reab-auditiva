@@ -3,8 +3,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../l10n/gen/app_localizations.dart';
 import '../../services/locale_controller.dart';
-import '../../services/theme_controller.dart';
-import '../theme/app_palette.dart';
 import 'home_screen.dart';
 
 /// Tela de entrada: simples e acolhedora (ver PRODUTO.md §5 e §7).
@@ -21,13 +19,12 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _isLoading = false;
   bool _isSignUp = false;
 
-  AppPalette get _p => context.watch<ThemeController>().palette;
-  Color get _bg => _p.bg;
-  Color get _card => _p.card;
-  Color get _field => _p.card;
-  Color get _primary => _p.primary;
-  Color get _textMain => _p.textMain;
-  Color get _textSoft => _p.textSoft;
+  ColorScheme get _cs => Theme.of(context).colorScheme;
+  Color get _card => _cs.surface;
+  Color get _field => _cs.surface;
+  Color get _primary => _cs.primary;
+  Color get _textMain => _cs.onSurface;
+  Color get _textSoft => _cs.onSurfaceVariant;
 
   Future<void> _handleAuth() async {
     final l10n = AppLocalizations.of(context);
@@ -122,7 +119,6 @@ class _AuthScreenState extends State<AuthScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
-      backgroundColor: _bg,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(

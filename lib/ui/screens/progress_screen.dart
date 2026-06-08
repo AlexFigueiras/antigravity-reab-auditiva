@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:provider/provider.dart';
 import '../../l10n/gen/app_localizations.dart';
 import '../../models/rehab_session.dart';
 import '../../services/supabase_service.dart';
-import '../../services/theme_controller.dart';
-import '../theme/app_palette.dart';
 import 'outcome_test_screen.dart';
 
 /// Tela de evolução do usuário — visual rico com cards por módulo,
@@ -19,13 +16,12 @@ class ProgressScreen extends StatefulWidget {
 
 class _ProgressScreenState extends State<ProgressScreen>
     with SingleTickerProviderStateMixin {
-  AppPalette get _p => context.watch<ThemeController>().palette;
-  Color get _bg => _p.bg;
-  Color get _card => _p.card;
-  Color get _primary => _p.primary;
-  Color get _textMain => _p.textMain;
-  Color get _textSoft => _p.textSoft;
-  Color get _correct => _p.correct;
+  ColorScheme get _cs => Theme.of(context).colorScheme;
+  Color get _card => _cs.surface;
+  Color get _primary => _cs.primary;
+  Color get _textMain => _cs.onSurface;
+  Color get _textSoft => _cs.onSurfaceVariant;
+  Color get _correct => _cs.tertiary;
   static const _warn = Color(0xFFE6A23C);
 
   final SupabaseService _supabase = SupabaseService();
@@ -136,9 +132,8 @@ class _ProgressScreenState extends State<ProgressScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
       appBar: AppBar(
-        backgroundColor: _bg,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text(AppLocalizations.of(context).progressScreenTitle,
             style: TextStyle(
@@ -297,7 +292,7 @@ class _ProgressScreenState extends State<ProgressScreen>
                 child: CircularProgressIndicator(
                   value: 1.0,
                   strokeWidth: 6,
-                  color: _bg,
+                  color: _card,
                   strokeCap: StrokeCap.round,
                 ),
               ),
@@ -410,7 +405,7 @@ class _ProgressScreenState extends State<ProgressScreen>
                           const SizedBox(height: 4),
                           LinearProgressIndicator(
                             value: value,
-                            backgroundColor: _bg,
+                            backgroundColor: _card,
                             color: value >= 0.7 ? _correct : _primary,
                             minHeight: 4,
                             borderRadius: BorderRadius.circular(2),
@@ -553,7 +548,7 @@ class _ProgressScreenState extends State<ProgressScreen>
                   radius: 4,
                   color: _primary,
                   strokeWidth: 2,
-                  strokeColor: _bg,
+                  strokeColor: _card,
                 ),
               ),
               belowBarData: BarAreaData(
@@ -629,7 +624,7 @@ class _ProgressScreenState extends State<ProgressScreen>
                 builder: (context, value, _) {
                   return LinearProgressIndicator(
                     value: value,
-                    backgroundColor: _bg,
+                    backgroundColor: _card,
                     color: _warn,
                     minHeight: 4,
                     borderRadius: BorderRadius.circular(2),
@@ -797,7 +792,7 @@ class _ProgressScreenState extends State<ProgressScreen>
                   radius: 4,
                   color: _primary,
                   strokeWidth: 2,
-                  strokeColor: _bg,
+                  strokeColor: _card,
                 ),
               ),
               belowBarData: BarAreaData(

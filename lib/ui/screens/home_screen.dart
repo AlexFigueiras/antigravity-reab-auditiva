@@ -8,8 +8,7 @@ import '../../services/supabase_service.dart';
 import '../../screens/threshold_test_screen.dart';
 import '../../l10n/gen/app_localizations.dart';
 import '../../services/locale_controller.dart';
-import '../../services/theme_controller.dart';
-import '../theme/app_palette.dart';
+import '../../core/theme_notifier.dart';
 import '../../audio_engine/audio_engine.dart';
 import '../widgets/tts_voice_banner.dart';
 import 'package:provider/provider.dart';
@@ -47,14 +46,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// instalada no device → a fala sairá com outro sotaque. Mostra o aviso.
   bool _ttsVoiceMissing = false;
 
-  // Paleta acolhedora vinda do tema ativo (claro por padrão). Lida via
-  // `context.watch` no build para reconstruir ao trocar o visual.
-  AppPalette get _p => context.watch<ThemeController>().palette;
-  Color get _bg => _p.bg;
-  Color get _card => _p.card;
-  Color get _primary => _p.primary;
-  Color get _textMain => _p.textMain;
-  Color get _textSoft => _p.textSoft;
+  ColorScheme get _cs => Theme.of(context).colorScheme;
+  Color get _card => _cs.surface;
+  Color get _primary => _cs.primary;
+  Color get _textMain => _cs.onSurface;
+  Color get _textSoft => _cs.onSurfaceVariant;
 
   @override
   void initState() {
@@ -197,7 +193,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final l10n = AppLocalizations.of(context);
 
     return Scaffold(
-      backgroundColor: _bg,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
@@ -269,7 +264,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _buildPermissionGuard() {
     return Scaffold(
-      backgroundColor: _bg,
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(32.0),
@@ -437,7 +431,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         value: val,
                         strokeWidth: 6,
                         color: completed ? const Color(0xFF3FB37F) : _primary,
-                        backgroundColor: _bg,
                         strokeCap: StrokeCap.round,
                       );
                     },
@@ -695,8 +688,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _buildLanguageButton(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final controller = context.read<LocaleController>();
-    final themeController = context.read<ThemeController>();
-    final isDark = context.watch<ThemeController>().isDark;
+    final themeNotifier = context.read<ThemeNotifier>();
+    final isDark = context.watch<ThemeNotifier>().mode == ThemeMode.dark;
     return PopupMenuButton<String>(
       color: _card,
       tooltip: l10n.settingsMenuTooltip,
@@ -708,7 +701,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           // O locale alvo mudou → a variante de voz exigida também. Re-checa.
           await _checkTtsVoice();
         } else if (value == 'theme') {
-          await themeController.toggle();
+          await themeNotifier.toggle();
         } else if (value == 'logout') {
           await _logout(context);
         }
@@ -1209,10 +1202,10 @@ class _ProgressBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.watch<ThemeController>().palette;
-    final primary = p.primary;
-    final correct = p.correct;
-    final card = p.card;
+    final cs = Theme.of(context).colorScheme;
+    final primary = cs.primary;
+    final correct = cs.tertiary;
+    final card = cs.surface;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1249,7 +1242,7 @@ class _ProgressBar extends StatelessWidget {
               child: Container(
                 width: 2,
                 height: 14,
-                color: p.textMain.withValues(alpha: 0.45),
+                color: cs.onSurface.withValues(alpha: 0.45),
               ),
             ),
           ],
@@ -1260,10 +1253,10 @@ class _ProgressBar extends StatelessWidget {
           children: [
             Text(AppLocalizations.of(context).progressBarCurrentLabel(
                     (value * 100).toStringAsFixed(0)),
-                style: TextStyle(color: p.textSoft, fontSize: 12)),
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
             Text(AppLocalizations.of(context).progressBarTargetLabel(
                     (target * 100).toStringAsFixed(0)),
-                style: TextStyle(color: p.textSoft, fontSize: 12)),
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
           ],
         ),
       ],
@@ -1297,12 +1290,12 @@ class _Card extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.watch<ThemeController>().palette;
-    final card = p.card;
-    final primary = p.primary;
-    final textMain = p.textMain;
-    final textSoft = p.textSoft;
-    final correct = p.correct;
+    final cs = Theme.of(context).colorScheme;
+    final card = cs.surface;
+    final primary = cs.primary;
+    final textMain = cs.onSurface;
+    final textSoft = cs.onSurfaceVariant;
+    final correct = cs.tertiary;
     return Material(
       color: Colors.transparent,
       child: InkWell(

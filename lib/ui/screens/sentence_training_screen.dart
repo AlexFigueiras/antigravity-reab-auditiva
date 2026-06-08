@@ -11,7 +11,7 @@ import '../widgets/seu_joao_scene.dart';
 import '../../core/adaptive_staircase.dart';
 import '../../l10n/gen/app_localizations.dart';
 import '../../services/audio_accessibility.dart';
-import '../../services/theme_controller.dart';
+
 import '../widgets/volume_drift_banner.dart';
 
 /// MÓDULO DE FRASES (Fase 3): compreensão de frases do dia a dia em ruído,
@@ -230,16 +230,16 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
 
   Future<void> _showResultDialog(double srt) async {
     final l10n = AppLocalizations.of(context);
-    final p = context.read<ThemeController>().palette;
+    final cs = Theme.of(context).colorScheme;
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: p.card,
+        backgroundColor: cs.surface,
         title: Text(l10n.sentenceResultDialogTitle,
-            style: TextStyle(color: p.textMain, fontSize: 20)),
+            style: TextStyle(color: cs.onSurface, fontSize: 20)),
         content: Text(
           l10n.sentenceResultDialogBody(widget.environment.localizedTitle(context), srt.toStringAsFixed(0)),
-          style: TextStyle(color: p.textSoft, fontSize: 18, height: 1.4),
+          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 18, height: 1.4),
         ),
         actions: [
           TextButton(
@@ -259,9 +259,9 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
   Widget build(BuildContext context) {
     final env = widget.environment;
     final l10n = AppLocalizations.of(context);
-    final p = context.watch<ThemeController>().palette;
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: p.bg,
+      backgroundColor: cs.surface,
       appBar: AppBar(
         title: Text(env.localizedTitle(context)),
         backgroundColor: Colors.transparent,
@@ -273,7 +273,7 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
             radius: 1.3,
             colors: [
               env.color.withValues(alpha: 0.18),
-              p.bg,
+              cs.surface,
             ],
           ),
         ),
@@ -303,9 +303,9 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: _feedbackText == null
-                        ? p.textSoft
+                        ? cs.onSurfaceVariant
                         : (_mood == JoaoMood.happy
-                            ? p.correct
+                            ? cs.tertiary
                             : Colors.orangeAccent),
                     fontSize: 18,
                     height: 1.35,
@@ -316,7 +316,7 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
                 Text(l10n.sentenceWhichSentence,
                     style: TextStyle(
                         fontSize: 16,
-                        color: p.textSoft,
+                        color: cs.onSurfaceVariant,
                         fontWeight: FontWeight.w500)),
                 const SizedBox(height: 16),
                 ..._options.map((opt) => Padding(
@@ -325,9 +325,9 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
                         width: double.infinity,
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: p.card,
+                            backgroundColor: cs.surface,
                             disabledBackgroundColor:
-                                p.card.withValues(alpha: 0.5),
+                                cs.surface.withValues(alpha: 0.5),
                             minimumSize: const Size(0, 76),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16),
@@ -339,7 +339,7 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
                           child: Text(opt,
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                  color: p.textMain,
+                                  color: cs.onSurface,
                                   fontSize: 21,
                                   fontWeight: FontWeight.bold)),
                         ),
@@ -350,10 +350,10 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
                 TextButton.icon(
                   onPressed: (_canRespond && !_volumeDriftWarning) ? _playStimulus : null,
                   icon: Icon(Icons.replay,
-                      color: (_canRespond && !_volumeDriftWarning) ? env.color : p.textSoft),
+                      color: (_canRespond && !_volumeDriftWarning) ? env.color : cs.onSurfaceVariant),
                   label: Text(l10n.dashboardListenAgain,
                       style: TextStyle(
-                          color: (_canRespond && !_volumeDriftWarning) ? env.color : p.textSoft,
+                          color: (_canRespond && !_volumeDriftWarning) ? env.color : cs.onSurfaceVariant,
                           fontSize: 16)),
                 ),
               ],
@@ -365,13 +365,13 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
   }
 
   Widget _progressRow(TrainingEnvironment env, AppLocalizations l10n) {
-    final p = context.watch<ThemeController>().palette;
+    final cs = Theme.of(context).colorScheme;
     return Row(
       children: [
         Text(
             l10n.sentenceTrainingProgress(
                 "${(_currentTrial + 1).clamp(1, _maxTrials)}", "$_maxTrials"),
-            style: TextStyle(color: p.textSoft, fontSize: 14)),
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14)),
         const Spacer(),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

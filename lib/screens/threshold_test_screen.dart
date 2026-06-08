@@ -8,7 +8,6 @@ import '../core/listening_mode.dart';
 import '../models/audiogram.dart';
 import '../services/audio_accessibility.dart';
 import '../services/supabase_service.dart';
-import '../services/theme_controller.dart';
 import '../ui/widgets/listening_mode_banner.dart';
 import '../ui/widgets/volume_drift_banner.dart';
 import '../l10n/gen/app_localizations.dart';
@@ -174,7 +173,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
   Widget _buildEarChooser() {
     // Espaço para não ficar atrás da AppBar transparente (evita sobreposição
     // do título "Teste de audição" com a pergunta abaixo).
-    final p = context.watch<ThemeController>().palette;
+    final p = Theme.of(context).colorScheme;
     final topGap = MediaQuery.of(context).padding.top + kToolbarHeight + 16;
     return SafeArea(
       top: false,
@@ -187,13 +186,13 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
               AppLocalizations.of(context).thresholdTestWhichEar,
             textAlign: TextAlign.center,
             style: TextStyle(
-                color: p.textMain, fontSize: 24, fontWeight: FontWeight.bold),
+                color: p.onSurface, fontSize: 24, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Text(
             AppLocalizations.of(context).thresholdTestPutHeadphones,
             textAlign: TextAlign.center,
-            style: TextStyle(color: p.textSoft, fontSize: 16, height: 1.4),
+            style: TextStyle(color: p.onSurfaceVariant, fontSize: 16, height: 1.4),
           ),
           const SizedBox(height: 28),
 
@@ -225,7 +224,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                   Text(
                     AppLocalizations.of(context).thresholdTestMonoWarningBody,
                     style: TextStyle(
-                        color: p.textSoft, fontSize: 14, height: 1.45),
+                        color: p.onSurfaceVariant, fontSize: 14, height: 1.45),
                   ),
                 ],
               ),
@@ -260,7 +259,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                   Text(
                     AppLocalizations.of(context).hearingTestVolumeCardBody,
                     style: TextStyle(
-                        color: p.textSoft, fontSize: 14, height: 1.45),
+                        color: p.onSurfaceVariant, fontSize: 14, height: 1.45),
                   ),
                   const SizedBox(height: 14),
                   SizedBox(
@@ -324,7 +323,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
   }
 
   Widget _earCard(EarSide ear) {
-    final p = context.watch<ThemeController>().palette;
+    final p = Theme.of(context).colorScheme;
     final isLeft = ear == EarSide.left;
     final done = _completedEars.contains(ear);
     final color = isLeft ? Colors.blueAccent : Colors.redAccent;
@@ -339,7 +338,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: p.card,
+          color: p.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: color.withValues(alpha: 0.5), width: 1.5),
         ),
@@ -356,7 +355,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                       ? AppLocalizations.of(context).thresholdTestLeftEar
                       : AppLocalizations.of(context).thresholdTestRightEar,
                       style: TextStyle(
-                          color: p.textMain,
+                          color: p.onSurface,
                           fontSize: 19,
                           fontWeight: FontWeight.bold)),
                   Text(
@@ -364,14 +363,14 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                         ? AppLocalizations.of(context).thresholdTestEarDone
                         : AppLocalizations.of(context).thresholdTestEarTap,
                     style: TextStyle(
-                        color: done ? p.correct : p.textSoft,
+                        color: done ? p.tertiary : p.onSurfaceVariant,
                         fontSize: 14),
                   ),
                 ],
               ),
             ),
             Icon(done ? Icons.check_circle : Icons.chevron_right,
-                color: done ? p.correct : p.textSoft,
+                color: done ? p.tertiary : p.onSurfaceVariant,
                 size: 26),
           ],
         ),
@@ -606,7 +605,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
   /// no resultado recém-medido quanto no resultado salvo carregado do banco.
   Widget _audiogramChart(
       List<AudiometryPoint> leftPoints, List<AudiometryPoint> rightPoints) {
-    final p = context.watch<ThemeController>().palette;
+    final p = Theme.of(context).colorScheme;
     const freqLabels = ['250', '500', '750', '1K', '1.5K', '2K', '3K', '4K', '6K', '8K'];
     return Container(
       height: 300,
@@ -645,7 +644,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8.0),
                         child: Text(freqLabels[idx],
-                            style: TextStyle(color: p.textSoft, fontSize: 9)),
+                            style: TextStyle(color: p.onSurfaceVariant, fontSize: 9)),
                       );
                     })),
             bottomTitles:
@@ -658,7 +657,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
               reservedSize: 40,
               interval: 20,
               getTitlesWidget: (value, meta) => Text("${(-value).toInt()}dB",
-                  style: TextStyle(color: p.textSoft, fontSize: 10)),
+                  style: TextStyle(color: p.onSurfaceVariant, fontSize: 10)),
             )),
           ),
           gridData: const FlGridData(
@@ -670,8 +669,8 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
           borderData: FlBorderData(
               show: true,
               border: Border(
-                  bottom: BorderSide(color: p.textSoft.withValues(alpha: 0.15)),
-                  left: BorderSide(color: p.textSoft.withValues(alpha: 0.15)))),
+                  bottom: BorderSide(color: p.onSurfaceVariant.withValues(alpha: 0.15)),
+                  left: BorderSide(color: p.onSurfaceVariant.withValues(alpha: 0.15)))),
         ),
       ),
     );
@@ -679,13 +678,13 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
 
   /// Legenda do gráfico (azul = esquerdo, vermelho = direito).
   Widget _chartLegend() {
-    final p = context.watch<ThemeController>().palette;
+    final p = Theme.of(context).colorScheme;
     Widget dot(Color c, String label) => Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(width: 14, height: 14, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
             const SizedBox(width: 8),
-            Text(label, style: TextStyle(color: p.textSoft, fontSize: 14)),
+            Text(label, style: TextStyle(color: p.onSurfaceVariant, fontSize: 14)),
           ],
         );
     return Row(
@@ -701,7 +700,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
   /// Tela de resultado do teste já salvo: mostra o gráfico do último teste e
   /// um botão "Refazer teste" embaixo.
   Widget _buildSavedResult() {
-    final p = context.watch<ThemeController>().palette;
+    final p = Theme.of(context).colorScheme;
     final saved = _savedAudiogram!;
     final topGap = MediaQuery.of(context).padding.top + kToolbarHeight + 16;
     final d = saved.date;
@@ -717,12 +716,12 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
               AppLocalizations.of(context).thresholdTestLastResult,
               textAlign: TextAlign.center,
               style: TextStyle(
-                  color: p.textMain, fontSize: 22, fontWeight: FontWeight.bold),
+                  color: p.onSurface, fontSize: 22, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 6),
             Text(
               AppLocalizations.of(context).thresholdTestDoneOn(dataStr),
-              style: TextStyle(color: p.textSoft, fontSize: 15),
+              style: TextStyle(color: p.onSurfaceVariant, fontSize: 15),
             ),
             const SizedBox(height: 24),
             _audiogramChart(saved.leftEar, saved.rightEar),
@@ -751,7 +750,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: Text(AppLocalizations.of(context).thresholdTestBack,
-                  style: TextStyle(color: p.textSoft, fontSize: 16)),
+                  style: TextStyle(color: p.onSurfaceVariant, fontSize: 16)),
             ),
           ],
         ),
@@ -764,16 +763,15 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.watch<ThemeController>().palette;
+    final p = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: p.bg,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text(
           AppLocalizations.of(context).thresholdTestTitle,
-          style: TextStyle(letterSpacing: 1, fontSize: 16, fontWeight: FontWeight.bold, color: p.textSoft),
+          style: TextStyle(letterSpacing: 1, fontSize: 16, fontWeight: FontWeight.bold, color: p.onSurfaceVariant),
         ),
       ),
       body: Container(
@@ -782,7 +780,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
           gradient: RadialGradient(
             center: const Alignment(0, -0.5),
             radius: 1.5,
-            colors: [p.card, p.bg],
+            colors: [p.surface, p.surface],
           ),
         ),
         child: _loadingSaved
@@ -876,7 +874,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                       fontSize: 64,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -2,
-                      color: p.textMain,
+                      color: p.onSurface,
                     ),
                   ),
                 ],
@@ -893,7 +891,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                         AppLocalizations.of(context).thresholdTestPreparing,
                         key: const ValueKey("status_preparing"),
                         style: TextStyle(
-                          color: p.textSoft,
+                          color: p.onSurfaceVariant,
                           fontSize: 15,
                           fontStyle: FontStyle.italic,
                         ),
@@ -926,7 +924,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                             AppLocalizations.of(context).thresholdTestDidYouHear,
                             key: const ValueKey("status_idle"),
                             style: TextStyle(
-                              color: p.textSoft,
+                              color: p.onSurfaceVariant,
                               fontSize: 15,
                             ),
                           ),
@@ -962,7 +960,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                 height: 60,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: p.correct,
+                    backgroundColor: p.tertiary,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     elevation: 10,
                   ),
@@ -979,8 +977,8 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                 style: TextStyle(
                   fontSize: 18,
                   color: (_isWaitingForNext || _isPlayingTone)
-                      ? p.textSoft.withValues(alpha: 0.4)
-                      : p.textSoft,
+                      ? p.onSurfaceVariant.withValues(alpha: 0.4)
+                      : p.onSurfaceVariant,
                   fontWeight: FontWeight.w400,
                 ),
               ),
@@ -990,8 +988,8 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
                 children: [
                    _ResponseButton(
                     label: AppLocalizations.of(context).commonNo,
-                    color: p.card,
-                    textColor: p.textSoft,
+                    color: p.surface,
+                    textColor: p.onSurfaceVariant,
                     onPressed: (_isWaitingForNext || _isPlayingTone || _volumeDriftWarning) ? null : () => _onResponse(false),
                   ),
                   const SizedBox(width: 40),

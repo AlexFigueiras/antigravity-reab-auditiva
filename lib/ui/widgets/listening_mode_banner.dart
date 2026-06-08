@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../../core/listening_mode.dart';
 import '../../l10n/gen/app_localizations.dart';
-import '../../services/theme_controller.dart';
 
 /// Banner de instrução da condição de escuta (com/sem aparelho), com confirmação
 /// ativa opcional. Pensado para o público idoso: ícone grande, frase curta, alto
@@ -29,7 +27,7 @@ class ListeningModeBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final p = context.watch<ThemeController>().palette;
+    final cs = Theme.of(context).colorScheme;
     final accent =
         mode.isAided ? const Color(0xFF3FB37F) : const Color(0xFF4F8DF7);
     final showConfirm = confirmed != null && onConfirmedChanged != null;
@@ -63,7 +61,7 @@ class ListeningModeBanner extends StatelessWidget {
                 child: Text(
                   instruction,
                   style: TextStyle(
-                    color: p.textMain,
+                    color: cs.onSurface,
                     fontSize: 19,
                     height: 1.3,
                     fontWeight: FontWeight.w700,
@@ -75,7 +73,7 @@ class ListeningModeBanner extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             why,
-            style: TextStyle(color: p.textSoft, fontSize: 15, height: 1.4),
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 15, height: 1.4),
           ),
           if (showConfirm) ...[
             const SizedBox(height: 14),
@@ -88,9 +86,9 @@ class ListeningModeBanner extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: confirmed!
                       ? accent.withValues(alpha: 0.18)
-                      : p.textMain.withValues(alpha: 0.04),
+                      : cs.onSurface.withValues(alpha: 0.04),
                   border: Border.all(
-                      color: confirmed! ? accent : p.textMain.withValues(alpha: 0.24),
+                      color: confirmed! ? accent : cs.onSurface.withValues(alpha: 0.24),
                       width: 1.5),
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -100,7 +98,7 @@ class ListeningModeBanner extends StatelessWidget {
                       confirmed!
                           ? Icons.check_circle
                           : Icons.radio_button_unchecked,
-                      color: confirmed! ? accent : p.textSoft,
+                      color: confirmed! ? accent : cs.onSurfaceVariant,
                       size: 26,
                     ),
                     const SizedBox(width: 12),
@@ -108,7 +106,7 @@ class ListeningModeBanner extends StatelessWidget {
                       child: Text(
                         confirmLabel,
                         style: TextStyle(
-                          color: confirmed! ? p.textMain : p.textSoft,
+                          color: confirmed! ? cs.onSurface : cs.onSurfaceVariant,
                           fontSize: 17,
                           fontWeight: FontWeight.w600,
                         ),

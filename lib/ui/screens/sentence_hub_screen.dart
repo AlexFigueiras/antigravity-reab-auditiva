@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../../core/environments.dart';
 import '../../models/audiogram.dart';
 import '../../l10n/gen/app_localizations.dart';
-import '../../services/theme_controller.dart';
-import '../theme/app_palette.dart';
 import 'sentence_training_screen.dart';
 
 /// Hub "Ajude o Seu João": lista os ambientes que ele frequenta. A pessoa
@@ -19,12 +16,10 @@ class SentenceHubScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final AppPalette p = context.watch<ThemeController>().palette;
-    final Color bg = p.bg;
-    final Color textMain = p.textMain;
-    final Color textSoft = p.textSoft;
+    final cs = Theme.of(context).colorScheme;
+    final Color textMain = cs.onSurface;
+    final Color textSoft = cs.onSurfaceVariant;
     return Scaffold(
-      backgroundColor: bg,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -74,10 +69,10 @@ class _EnvironmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final AppPalette p = context.watch<ThemeController>().palette;
-    final Color card = p.card;
-    final Color textMain = p.textMain;
-    final Color textSoft = p.textSoft;
+    final cs = Theme.of(context).colorScheme;
+    final Color card = cs.surface;
+    final Color textMain = cs.onSurface;
+    final Color textSoft = cs.onSurfaceVariant;
     return Material(
       color: Colors.transparent,
       child: InkWell(

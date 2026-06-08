@@ -14,8 +14,6 @@ import '../../services/supabase_service.dart';
 import '../widgets/listening_mode_banner.dart';
 import '../widgets/volume_drift_banner.dart';
 import '../../services/audio_accessibility.dart';
-import '../../services/theme_controller.dart';
-import '../theme/app_palette.dart';
 import '../../l10n/gen/app_localizations.dart';
 import 'mission_report_screen.dart';
 import 'dart:math' as math;
@@ -33,14 +31,12 @@ class TrainingDashboard extends StatefulWidget {
 
 class _TrainingDashboardState extends State<TrainingDashboard>
     with SingleTickerProviderStateMixin {
-  // Paleta calma (mesma da home) — agora reativa ao tema.
-  AppPalette get _p => context.watch<ThemeController>().palette;
-  Color get _bg => _p.bg;
-  Color get _card => _p.card;
-  Color get _primary => _p.primary;
-  Color get _textMain => _p.textMain;
-  Color get _textSoft => _p.textSoft;
-  Color get _correct => _p.correct;
+  ColorScheme get _cs => Theme.of(context).colorScheme;
+  Color get _card => _cs.surface;
+  Color get _primary => _cs.primary;
+  Color get _textMain => _cs.onSurface;
+  Color get _textSoft => _cs.onSurfaceVariant;
+  Color get _correct => _cs.tertiary;
 
   bool _isTrainingActive = false;
   bool _volumeDriftWarning = false;
@@ -553,9 +549,8 @@ class _TrainingDashboardState extends State<TrainingDashboard>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
       appBar: AppBar(
-        backgroundColor: _bg,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
         title: Text(
