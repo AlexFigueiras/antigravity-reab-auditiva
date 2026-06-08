@@ -261,7 +261,6 @@ class _SentenceTrainingScreenState extends State<SentenceTrainingScreen> {
     final l10n = AppLocalizations.of(context);
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: cs.surface,
       appBar: AppBar(
         title: Text(env.localizedTitle(context)),
         backgroundColor: Colors.transparent,
