@@ -1249,7 +1249,7 @@ class _ProgressBar extends StatelessWidget {
               child: Container(
                 width: 2,
                 height: 14,
-                color: Colors.white54,
+                color: p.textMain.withValues(alpha: 0.45),
               ),
             ),
           ],
@@ -1260,10 +1260,10 @@ class _ProgressBar extends StatelessWidget {
           children: [
             Text(AppLocalizations.of(context).progressBarCurrentLabel(
                     (value * 100).toStringAsFixed(0)),
-                style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                style: TextStyle(color: p.textSoft, fontSize: 12)),
             Text(AppLocalizations.of(context).progressBarTargetLabel(
                     (target * 100).toStringAsFixed(0)),
-                style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                style: TextStyle(color: p.textSoft, fontSize: 12)),
           ],
         ),
       ],

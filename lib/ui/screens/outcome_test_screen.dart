@@ -324,7 +324,7 @@ class _OutcomeTestScreenState extends State<OutcomeTestScreen> {
         const SizedBox(height: 8),
         LinearProgressIndicator(
           value: _currentTrial / _totalTrials,
-          backgroundColor: Colors.white10,
+          backgroundColor: _textSoft.withValues(alpha: 0.12),
           color: _primary,
           minHeight: 6,
           borderRadius: BorderRadius.circular(3),
@@ -357,7 +357,7 @@ class _OutcomeTestScreenState extends State<OutcomeTestScreen> {
                   decoration: BoxDecoration(
                     color: isFocused ? _primary.withValues(alpha: 0.12) : _card,
                     border: Border.all(
-                      color: isFocused ? _primary : (hasValue ? Colors.white24 : Colors.transparent),
+                      color: isFocused ? _primary : (hasValue ? _textSoft.withValues(alpha: 0.35) : Colors.transparent),
                       width: 1.5,
                     ),
                     borderRadius: BorderRadius.circular(10),
@@ -387,12 +387,13 @@ class _OutcomeTestScreenState extends State<OutcomeTestScreen> {
           height: 52,
           child: OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Colors.white24),
+              side: BorderSide(color: _textSoft.withValues(alpha: 0.35)),
+              foregroundColor: _textSoft,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             onPressed: _playStimulus,
-            icon: const Icon(Icons.volume_up, color: Colors.white70),
-            label: Text(l10n.outcomeTestListenSentence, style: const TextStyle(color: Colors.white70, fontSize: 16)),
+            icon: const Icon(Icons.volume_up),
+            label: Text(l10n.outcomeTestListenSentence, style: const TextStyle(fontSize: 16)),
           ),
         ),
         const SizedBox(height: 28),
@@ -429,7 +430,7 @@ class _OutcomeTestScreenState extends State<OutcomeTestScreen> {
                           decoration: BoxDecoration(
                             color: isSelected ? _primary.withValues(alpha: 0.15) : _card,
                             border: Border.all(
-                              color: isSelected ? _primary : Colors.white10,
+                              color: isSelected ? _primary : _textSoft.withValues(alpha: 0.15),
                             ),
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -501,8 +502,8 @@ class _OutcomeTestScreenState extends State<OutcomeTestScreen> {
             height: 56,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: _isSentenceComplete ? _primary : Colors.white12,
-                disabledBackgroundColor: Colors.white12,
+                backgroundColor: _isSentenceComplete ? _primary : _textSoft.withValues(alpha: 0.15),
+                disabledBackgroundColor: _textSoft.withValues(alpha: 0.15),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
               onPressed: _isSentenceComplete ? _confirmSentence : null,
@@ -540,7 +541,7 @@ class _OutcomeTestScreenState extends State<OutcomeTestScreen> {
           decoration: BoxDecoration(
             color: _card,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white10),
+            border: Border.all(color: _textSoft.withValues(alpha: 0.15)),
           ),
           child: Column(
             children: [

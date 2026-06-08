@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../audio_engine/audio_engine.dart';
 import '../../l10n/gen/app_localizations.dart';
@@ -6,6 +7,8 @@ import '../../models/audiogram.dart';
 import '../../screens/threshold_test_screen.dart';
 import '../../services/listening_mode_service.dart';
 import '../../services/supabase_service.dart';
+import '../../services/theme_controller.dart';
+import '../theme/app_palette.dart';
 import 'home_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -22,6 +25,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   bool? _usesHearingAid;
 
   bool _saving = false;
+
+  AppPalette get _p => context.watch<ThemeController>().palette;
 
   Future<void> _completeOnboarding() async {
     if (_saving) return;
@@ -84,7 +89,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A),
+      backgroundColor: _p.bg,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(28.0),
@@ -107,17 +112,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       children: [
         const SizedBox(height: 40),
         Text(l10n.onboardingWelcomeTitle,
-            style: const TextStyle(
-                color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+            style: TextStyle(
+                color: _p.textMain, fontSize: 28, fontWeight: FontWeight.bold)),
         const SizedBox(height: 16),
         Text(
           l10n.onboardingWelcomeBody1,
-          style: const TextStyle(color: Colors.white70, fontSize: 16, height: 1.6),
+          style: TextStyle(color: _p.textSoft, fontSize: 16, height: 1.6),
         ),
         const SizedBox(height: 16),
         Text(
           l10n.onboardingWelcomeBody2,
-          style: const TextStyle(color: Colors.white70, fontSize: 16, height: 1.6),
+          style: TextStyle(color: _p.textSoft, fontSize: 16, height: 1.6),
         ),
         const Spacer(),
         _nextButton(l10n.onboardingWelcomeButton),
@@ -138,8 +143,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       children: [
         const SizedBox(height: 40),
         Text(l10n.onboardingAgeTitle,
-            style: const TextStyle(
-                color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+            style: TextStyle(
+                color: _p.textMain, fontSize: 24, fontWeight: FontWeight.bold)),
         const SizedBox(height: 32),
         ...options.map((opt) => Padding(
           padding: const EdgeInsets.only(bottom: 12),
@@ -166,11 +171,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       children: [
         const SizedBox(height: 40),
         Text(l10n.onboardingDifficultyTitle,
-            style: const TextStyle(
-                color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+            style: TextStyle(
+                color: _p.textMain, fontSize: 24, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         Text(l10n.onboardingDifficultySubtitle,
-            style: const TextStyle(color: Colors.white54, fontSize: 14)),
+            style: TextStyle(color: _p.textSoft, fontSize: 14)),
         const SizedBox(height: 32),
         ...options.map((opt) => Padding(
           padding: const EdgeInsets.only(bottom: 12),
@@ -191,12 +196,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       children: [
         const SizedBox(height: 40),
         Text(l10n.onboardingHearingAidTitle,
-            style: const TextStyle(
-                color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+            style: TextStyle(
+                color: _p.textMain, fontSize: 24, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         Text(
           l10n.onboardingHearingAidSubtitle,
-          style: const TextStyle(color: Colors.white54, fontSize: 14, height: 1.4),
+          style: TextStyle(color: _p.textSoft, fontSize: 14, height: 1.4),
         ),
         const SizedBox(height: 24),
         _optionButton(l10n.onboardingHearingAidYes,
@@ -224,8 +229,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     _usesHearingAid == true
                         ? l10n.listeningModeAided_instruction
                         : l10n.listeningModeUnaided_instruction,
-                    style: const TextStyle(
-                        color: Colors.white, fontSize: 15, height: 1.4),
+                    style: TextStyle(
+                        color: _p.textMain, fontSize: 15, height: 1.4),
                   ),
                 ),
               ],
@@ -233,17 +238,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
         ],
         const SizedBox(height: 28),
-        const Divider(color: Colors.white12),
+        Divider(color: _p.textSoft.withValues(alpha: 0.15)),
         const SizedBox(height: 16),
         Text(l10n.onboardingVolumeHint,
-            style: const TextStyle(color: Colors.white70, fontSize: 14)),
+            style: TextStyle(color: _p.textSoft, fontSize: 14)),
         const SizedBox(height: 16),
         Center(
           child: ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1A1A1A),
-              foregroundColor: Colors.white,
-              side: const BorderSide(color: Colors.white24),
+              backgroundColor: _p.card,
+              foregroundColor: _p.textMain,
+              side: BorderSide(color: _p.textSoft.withValues(alpha: 0.25)),
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
             ),
             onPressed: () =>
@@ -268,15 +273,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
           color: selected
-              ? const Color(0xFF2563EB).withOpacity(0.15)
-              : const Color(0xFF1A1A1A),
+              ? _p.primary.withValues(alpha: 0.15)
+              : _p.card,
           border: Border.all(
-              color: selected ? const Color(0xFF2563EB) : Colors.white12),
+              color: selected ? _p.primary : _p.textSoft.withValues(alpha: 0.2)),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(label,
             style: TextStyle(
-                color: selected ? Colors.white : Colors.white70, fontSize: 15)),
+                color: selected ? _p.primary : _p.textMain, fontSize: 15)),
       ),
     );
   }
@@ -288,7 +293,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor:
-              enabled ? const Color(0xFF2563EB) : Colors.white12,
+              enabled ? _p.primary : _p.textSoft.withValues(alpha: 0.15),
           foregroundColor: Colors.white,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

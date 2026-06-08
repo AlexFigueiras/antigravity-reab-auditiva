@@ -606,15 +606,16 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
   /// no resultado recém-medido quanto no resultado salvo carregado do banco.
   Widget _audiogramChart(
       List<AudiometryPoint> leftPoints, List<AudiometryPoint> rightPoints) {
+    final p = context.watch<ThemeController>().palette;
+    const freqLabels = ['250', '500', '750', '1K', '1.5K', '2K', '3K', '4K', '6K', '8K'];
     return Container(
       height: 300,
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: LineChart(
         LineChartData(
-          minY: -120, // Inferior (Perda profunda)
-          maxY: 10, // Superior (Audição excelente)
+          minY: -120,
+          maxY: 10,
           lineBarsData: [
-            // ORELHA ESQUERDA (AZUL)
             LineChartBarData(
               spots: List.generate(leftPoints.length,
                   (i) => FlSpot(i.toDouble(), -leftPoints[i].threshold)),
@@ -623,7 +624,6 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
               barWidth: 3,
               dotData: const FlDotData(show: true),
             ),
-            // ORELHA DIREITA (VERMELHA)
             LineChartBarData(
               spots: List.generate(rightPoints.length,
                   (i) => FlSpot(i.toDouble(), -rightPoints[i].threshold)),
@@ -634,13 +634,20 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
             ),
           ],
           titlesData: FlTitlesData(
-            topTitles: const AxisTitles(
+            topTitles: AxisTitles(
                 sideTitles: SideTitles(
                     showTitles: true,
                     reservedSize: 30,
                     interval: 1,
-                    getTitlesWidget:
-                        _ThresholdTestScreenState._topTitleWidget)),
+                    getTitlesWidget: (value, meta) {
+                      final idx = value.toInt();
+                      if (idx < 0 || idx >= freqLabels.length) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8.0),
+                        child: Text(freqLabels[idx],
+                            style: TextStyle(color: p.textSoft, fontSize: 9)),
+                      );
+                    })),
             bottomTitles:
                 const AxisTitles(sideTitles: SideTitles(showTitles: false)),
             rightTitles:
@@ -651,7 +658,7 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
               reservedSize: 40,
               interval: 20,
               getTitlesWidget: (value, meta) => Text("${(-value).toInt()}dB",
-                  style: const TextStyle(color: Colors.white54, fontSize: 10)),
+                  style: TextStyle(color: p.textSoft, fontSize: 10)),
             )),
           ),
           gridData: const FlGridData(
@@ -662,9 +669,9 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
           ),
           borderData: FlBorderData(
               show: true,
-              border: const Border(
-                  bottom: BorderSide(color: Colors.white10),
-                  left: BorderSide(color: Colors.white10))),
+              border: Border(
+                  bottom: BorderSide(color: p.textSoft.withValues(alpha: 0.15)),
+                  left: BorderSide(color: p.textSoft.withValues(alpha: 0.15)))),
         ),
       ),
     );
@@ -752,21 +759,6 @@ class _ThresholdTestScreenState extends State<ThresholdTestScreen> {
     );
   }
 
-  static Widget _topTitleWidget(double value, TitleMeta meta) {
-    // Rótulos casados com a lista de frequências (10 pontos: inclui as
-    // intermediárias 750/1500/3000/6000). Mantém a ordem do eixo X.
-    const freqs = [
-      '250', '500', '750', '1K', '1.5K', '2K', '3K', '4K', '6K', '8K'
-    ];
-    int idx = value.toInt();
-    if (idx >= 0 && idx < freqs.length) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 8.0),
-        child: Text(freqs[idx], style: const TextStyle(color: Colors.white54, fontSize: 9)),
-      );
-    }
-    return const SizedBox.shrink();
-  }
 
   Color get _earColor => _currentEar == EarSide.left ? Colors.blueAccent : Colors.redAccent;
 

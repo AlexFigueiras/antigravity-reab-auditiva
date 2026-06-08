@@ -765,7 +765,7 @@ class _TrainingDashboardState extends State<TrainingDashboard>
                   decoration: BoxDecoration(
                     color: _card,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white12, width: 1.5),
+                    border: Border.all(color: _textSoft.withValues(alpha: 0.2), width: 1.5),
                   ),
                   alignment: Alignment.center,
                   child: Text(
@@ -816,7 +816,7 @@ class _TrainingDashboardState extends State<TrainingDashboard>
           decoration: BoxDecoration(
             color: _card,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white12, width: 1.5),
+            border: Border.all(color: _textSoft.withValues(alpha: 0.2), width: 1.5),
           ),
           alignment: Alignment.center,
           child: Text(
@@ -914,7 +914,7 @@ class _TrainingDashboardState extends State<TrainingDashboard>
           decoration: BoxDecoration(
             color: _card,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white12, width: 1.5),
+            border: Border.all(color: _textSoft.withValues(alpha: 0.2), width: 1.5),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,

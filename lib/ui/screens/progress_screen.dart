@@ -515,7 +515,7 @@ class _ProgressScreenState extends State<ProgressScreen>
             drawVerticalLine: false,
             horizontalInterval: 20,
             getDrawingHorizontalLine: (value) => FlLine(
-              color: Colors.white10,
+              color: _textSoft.withValues(alpha: 0.12),
               strokeWidth: 1,
             ),
           ),
@@ -753,7 +753,7 @@ class _ProgressScreenState extends State<ProgressScreen>
             drawVerticalLine: false,
             horizontalInterval: 4,
             getDrawingHorizontalLine: (value) => FlLine(
-              color: Colors.white10,
+              color: _textSoft.withValues(alpha: 0.12),
               strokeWidth: 1,
             ),
           ),
