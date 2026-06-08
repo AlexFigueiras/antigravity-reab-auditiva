@@ -2,7 +2,6 @@ import 'dart:math' as math;
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:provider/provider.dart';
 import '../audio_engine/audio_engine.dart';
 import '../core/listening_mode.dart';
 import '../models/audiogram.dart';
