@@ -52,6 +52,12 @@ local.properties
 .env.*
 !.env.example
 
+# Keystore — nunca subir para o repositório
+*.jks
+*.keystore
+key.properties
+*_base64.txt
+
 # Build/debug detritus
 analysis.txt
 build_log.txt
